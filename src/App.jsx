@@ -17,6 +17,8 @@ import {
   updateData,
 } from "./data.js";
 
+const loginPath = `${import.meta.env.BASE_URL}login.html`;
+
 const pages = {
   overview: "Visão geral",
   clients: "Clientes",
@@ -394,13 +396,13 @@ export default function App() {
 
   useEffect(() => {
     if (!firebaseConfigured || !firebaseAuth) {
-      window.location.replace("/login.html");
+      window.location.replace(loginPath);
       return undefined;
     }
     let active = true;
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (authenticatedUser) => {
       if (!authenticatedUser) {
-        window.location.replace("/login.html");
+        window.location.replace(loginPath);
         return;
       }
       setUser(authenticatedUser);
@@ -423,7 +425,7 @@ export default function App() {
       }
     }, (error) => {
       console.error("Não foi possível validar a sessão do Firebase.", error);
-      window.location.replace("/login.html");
+      window.location.replace(loginPath);
     });
     return () => {
       active = false;
@@ -632,7 +634,7 @@ export default function App() {
     setLoggingOut(true);
     try {
       await signOut(firebaseAuth);
-      window.location.replace("/login.html");
+      window.location.replace(loginPath);
     } catch (error) {
       console.error("Não foi possível encerrar a sessão.", error);
       setToast("Não foi possível sair da conta. Tente novamente.");

@@ -3,6 +3,8 @@ import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { firebaseAuth, firebaseConfigured } from "./firebase.js";
 import { usernameToFirebaseEmail } from "./auth.js";
 
+const appRoot = import.meta.env.BASE_URL;
+
 function getLoginError(error) {
   if (error.code === "auth/too-many-requests") {
     return "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
@@ -29,7 +31,7 @@ export default function Login() {
   useEffect(() => {
     if (!firebaseConfigured || !firebaseAuth) return undefined;
     return onAuthStateChanged(firebaseAuth, (user) => {
-      if (user) window.location.replace("/");
+      if (user) window.location.replace(appRoot);
     }, (authError) => {
       console.error("Não foi possível verificar a sessão do Firebase.", authError);
       setError("Não foi possível verificar a sessão. Recarregue a página e tente novamente.");
@@ -45,7 +47,7 @@ export default function Login() {
     try {
       const email = usernameToFirebaseEmail(username, import.meta.env.VITE_FIREBASE_PROJECT_ID);
       await signInWithEmailAndPassword(firebaseAuth, email, password);
-      window.location.replace("/");
+      window.location.replace(appRoot);
     } catch (authError) {
       console.error("Falha ao autenticar no Firebase.", authError);
       setError(getLoginError(authError));
@@ -57,7 +59,7 @@ export default function Login() {
   return (
     <main className="login-layout">
       <section className="login-brand-panel" aria-label="Nexo Gestão">
-        <a className="brand login-brand" href="/" aria-label="Nexo, início">
+        <a className="brand login-brand" href={appRoot} aria-label="Nexo, início">
           <span className="brand-mark">N</span>
           <span className="brand-copy"><strong>Nexo</strong><small>GESTÃO</small></span>
         </a>

@@ -51,6 +51,24 @@ Para preservar o UID e os dados locais de uma conta existente, o administrador p
 
 **Limitação dos e-mails técnicos:** eles não recebem mensagens. Recuperação de senha por e-mail e verificação de endereço não funcionarão para esses endereços; o administrador deve trocar a senha pelo Firebase Console. Se o usuário precisar de e-mail de recuperação ou verificação, será necessário usar um e-mail real como login ou desenvolver um fluxo administrativo alternativo.
 
+## Publicar no GitHub Pages
+
+O repositório `DeivSoares/nexoapp` inclui um workflow que compila o React e publica a pasta `dist` no caminho `/nexoapp/`. Para ativar:
+
+1. No GitHub, abra **DeivSoares/nexoapp → Settings → Secrets and variables → Actions → Variables**.
+2. Crie as variáveis do tipo **Repository variable** com os valores de configuração do app Web do Firebase:
+   - `VITE_FIREBASE_API_KEY`
+   - `VITE_FIREBASE_AUTH_DOMAIN`
+   - `VITE_FIREBASE_PROJECT_ID`
+   - `VITE_FIREBASE_STORAGE_BUCKET`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`
+   - `VITE_FIREBASE_APP_ID`
+3. Em **Settings → Pages**, selecione **GitHub Actions** como fonte de publicação.
+4. Em **Firebase Console → Authentication → Settings → Authorized domains**, adicione `deivsoares.github.io` (somente o domínio, sem `https://` nem `/nexoapp`).
+5. Envie um commit para a branch `main` ou execute manualmente o workflow **Deploy GitHub Pages** em **Actions**.
+
+O endereço do app será `https://deivsoares.github.io/nexoapp/`. O workflow falha claramente se faltar qualquer variável Firebase obrigatória, em vez de publicar uma tela sem configuração. A configuração Web do Firebase é destinada ao cliente; não coloque senhas de contas, service accounts ou credenciais administrativas nas variáveis `VITE_*`.
+
 ## Executar
 
 ```powershell
