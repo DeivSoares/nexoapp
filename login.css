@@ -1,0 +1,50 @@
+.login-page { min-height: 100vh; background: #fff; }
+.login-layout { display: grid; min-height: 100vh; grid-template-columns: minmax(320px,.9fr) minmax(420px,1.1fr); }
+.login-brand-panel { position: relative; display: flex; min-height: 100vh; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 35px clamp(28px,6vw,88px); background: linear-gradient(145deg,#243da9,#5269e5 67%,#7181eb); color: white; }
+.login-brand-panel::before,.login-brand-panel::after { position: absolute; right: -180px; bottom: 9%; width: 500px; height: 500px; border: 1px solid #ffffff20; border-radius: 50%; content: ""; }
+.login-brand-panel::after { right: -130px; bottom: 14%; width: 400px; height: 400px; }
+.login-brand { position: relative; z-index: 1; color: white; }
+.login-brand .brand-mark { border: 1px solid #ffffff45; background: #ffffff1c; box-shadow: none; }
+.login-brand .brand-copy small { color: #d5dcff; }
+.login-brand-message { position: relative; z-index: 1; max-width: 430px; margin: -35px 0 0; }
+.login-kicker { color: #d6dcff; font-size: 10px; font-weight: 700; letter-spacing: 1.7px; }
+.login-brand-message h1 { margin: 20px 0 14px; font-family: "Segoe UI",Arial,sans-serif; font-size: clamp(36px,4vw,55px); font-weight: 700; letter-spacing: -2px; line-height: 1.1; }
+.login-brand-message p { max-width: 340px; margin: 0; color: #e3e7ff; font-size: 14px; line-height: 1.7; }
+.login-brand-footer { position: relative; z-index: 1; color: #d5dcff; font-size: 11px; }
+.login-form-panel { display: flex; min-height: 100vh; flex-direction: column; justify-content: center; padding: 40px clamp(28px,8vw,120px); }
+.login-form-wrap { width: min(100%,390px); margin: auto; }
+.login-heading { margin-bottom: 28px; }
+.login-heading h2 { margin: 9px 0 8px; font-family: "Segoe UI",Arial,sans-serif; font-size: 27px; letter-spacing: -.8px; }
+.login-heading p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.login-form { display: grid; gap: 17px; }
+.login-field { display: grid; gap: 8px; color: #465168; font-size: 11px; font-weight: 600; }
+.login-field input { width: 100%; height: 44px; padding: 0 12px; border: 1px solid #e3e7ef; border-radius: 8px; background: white; color: var(--ink); font-size: 12px; font-weight: 400; }
+.login-field input::placeholder { color: #a5acba; }
+.login-field input:focus { border-color: #9caaf8; outline: 3px solid #edf0ff; }
+.password-control { position: relative; }
+.password-control input { padding-right: 72px; }
+.password-toggle { position: absolute; top: 50%; right: 10px; transform: translateY(-50%); border: 0; background: transparent; color: var(--blue); font-size: 10px; font-weight: 600; }
+.login-submit { width: 100%; height: 43px; margin-top: 3px; }
+.login-submit:disabled { cursor: wait; opacity: .7; }
+.login-error { margin: 0; padding: 10px 12px; border: 1px solid #ffd7dc; border-radius: 7px; background: var(--red-soft); color: #b93c4a; font-size: 11px; line-height: 1.5; }
+.login-access-note { display: flex; align-items: flex-start; gap: 8px; margin: 21px 0 0; color: #828b9d; font-size: 10px; line-height: 1.5; }
+.login-access-note span { color: var(--blue); }
+.login-setup-note { margin: 15px 0 0; padding: 11px 12px; border: 1px solid #f0dbb7; border-radius: 7px; background: #fff8e9; color: #805c27; font-size: 10px; line-height: 1.6; }
+.login-footer { margin: auto 0 0; padding-top: 36px; color: #a1a8b7; text-align: center; font-size: 10px; }
+@media (max-width: 760px) {
+  .login-layout { grid-template-columns: 1fr; }
+  .login-brand-panel { min-height: 220px; padding: 22px 24px; }
+  .login-brand-message { margin: 34px 0 5px; }
+  .login-brand-message h1 { margin: 11px 0 6px; font-size: 27px; letter-spacing: -.8px; }
+  .login-brand-message p { font-size: 11px; }
+  .login-brand-footer { display: none; }
+  .login-brand-panel::before { right: -230px; bottom: -325px; width: 430px; height: 430px; }
+  .login-brand-panel::after { display: none; }
+  .login-form-panel { min-height: calc(100vh - 220px); padding: 35px 24px 20px; }
+  .login-form-wrap { margin: 0 auto auto; }
+  .login-footer { padding-top: 32px; }
+}
+@media (max-width: 400px) {
+  .login-brand-panel { min-height: 205px; }
+  .login-form-panel { min-height: calc(100vh - 205px); }
+}

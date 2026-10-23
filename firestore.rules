@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function belongsToCompany(companyId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/companyMemberships/$(request.auth.uid))
+        && get(/databases/$(database)/documents/companyMemberships/$(request.auth.uid)).data.companyId == companyId
+        && get(/databases/$(database)/documents/companyMemberships/$(request.auth.uid)).data.active == true;
+    }
+
+    function managesCompanyUsers(companyId) {
+      return belongsToCompany(companyId)
+        && get(/databases/$(database)/documents/companyMemberships/$(request.auth.uid)).data.canManageUsers == true;
+    }
+
+    match /companyMemberships/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers'])
+        && request.resource.data.keys().hasAll(['companyId', 'active', 'canManageUsers'])
+        && request.resource.data.companyId is string
+        && request.resource.data.active == true
+        && request.resource.data.canManageUsers == false
+        && managesCompanyUsers(request.resource.data.companyId);
+      allow update: if managesCompanyUsers(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.canManageUsers == resource.data.canManageUsers
+        && request.resource.data.active is bool
+        && request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers']);
+      allow delete: if managesCompanyUsers(resource.data.companyId);
+    }
+
+    match /companies/{companyId}/data/{documentId} {
+      allow read, write: if belongsToCompany(companyId);
+    }
+
+    match /nexoUsers/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if false;
+    }
+  }
+}
