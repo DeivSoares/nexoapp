@@ -1,5 +1,6 @@
 import { doc, getDoc, getFirestore, onSnapshot, runTransaction } from "firebase/firestore";
 import { firebaseApp } from "./firebase.js";
+import { createCompanyMembership } from "./membership.js";
 
 const MEMBERSHIPS_COLLECTION = "companyMemberships";
 const COMPANIES_COLLECTION = "companies";
@@ -106,11 +107,7 @@ export async function createCloudTeamMember(currentUid, username, password, memb
 
       const current = validateData(companySnapshot.data());
       const next = update(current, { ...member, authUid: newUid });
-      transaction.set(newMembership, {
-        companyId,
-        active: true,
-        canManageUsers: false,
-      });
+      transaction.set(newMembership, createCompanyMembership(companyId, member.role, member.name));
       transaction.set(companyDocument, next);
       return { data: next };
     });

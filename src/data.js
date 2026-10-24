@@ -96,7 +96,7 @@ function getCloudDataError(error) {
   }
   if (error?.code === "permission-denied" || error?.code === "firestore/permission-denied") {
     return new Error(
-      "O Firestore negou o acesso. Confirme que as regras atuais de firestore.rules foram publicadas no mesmo projeto e que seu vínculo companyMemberships tem active=true e canManageUsers=true.",
+      "O Firestore negou a criação do membro. Confirme se as regras atuais de firestore.rules foram publicadas no mesmo projeto, se seu vínculo tem active=true e canManageUsers=true e se a versão mais recente do app foi publicada no GitHub Pages.",
       { cause: error },
     );
   }

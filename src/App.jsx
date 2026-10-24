@@ -374,7 +374,7 @@ function TeamPage({ data, search, onNew, onDelete }) {
           {!members.length && <tr><td colSpan="6" className="empty-state">{data.team.length ? "Nenhuma pessoa encontrada." : "Adicione o primeiro membro da equipe."}</td></tr>}
         </DataTable>
       </section>
-      <p className="security-note">A criação de contas exige que o vínculo da sua empresa tenha `canManageUsers: true`. Os níveis de acesso organizam a equipe, mas ainda não restringem as outras funções do app.</p>
+      <p className="security-note">Administradores podem criar usuários. As outras funções ainda não restringem o acesso às telas do app.</p>
     </>
   );
 }

@@ -19,17 +19,19 @@ service cloud.firestore {
 
     match /companyMemberships/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
-      allow create: if request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers'])
+      allow create: if request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers', 'usuario'])
         && request.resource.data.keys().hasAll(['companyId', 'active', 'canManageUsers'])
         && request.resource.data.companyId is string
         && request.resource.data.active == true
-        && request.resource.data.canManageUsers == false
+        && request.resource.data.canManageUsers is bool
+        && (!request.resource.data.keys().hasAny(['usuario']) || request.resource.data.usuario is string)
         && managesCompanyUsers(request.resource.data.companyId);
       allow update: if managesCompanyUsers(resource.data.companyId)
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.canManageUsers == resource.data.canManageUsers
         && request.resource.data.active is bool
-        && request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers']);
+        && request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers', 'usuario'])
+        && (!request.resource.data.keys().hasAny(['usuario']) || request.resource.data.usuario is string);
       allow delete: if managesCompanyUsers(resource.data.companyId);
     }
 
