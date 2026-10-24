@@ -31,7 +31,7 @@ const pages = {
   overview: "Visão geral",
   clients: "Clientes",
   finance: "Financeiro",
-  services: "Bots e sites",
+  services: "Serviços",
   team: "Equipe",
 };
 
@@ -241,7 +241,7 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
         </div>
         <div className="dialog-fields">{config.fields}</div>
         {type === "member" && <p className="security-note">O usuário entrará pelo nome de usuário e senha. A senha não será salva nos dados da equipe.</p>}
-        {type === "client" && !services.length && <p className="security-note">Cadastre um serviço na aba Bots e sites antes de adicionar um cliente.</p>}
+        {type === "client" && !services.length && <p className="security-note">Cadastre um serviço na aba Serviços antes de adicionar um cliente.</p>}
         {submitError && <p className="form-error" role="alert">{submitError}</p>}
         <div className="dialog-actions">
           <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -428,7 +428,7 @@ function ServicesPage({ data, search, onNew, onDelete, onToggle }) {
   const bots = data.services.filter((service) => service.type === "Bot");
   return (
     <>
-      <PageHeading title="Bots e sites" description="Acompanhe os serviços e projetos da sua operação." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo serviço</button>} />
+      <PageHeading title="Serviços" description="Acompanhe os serviços e projetos da sua operação." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo serviço</button>} />
       <section className="service-grid">
         <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon">⌘</span><span><strong>Sites e aplicações</strong><small>Catálogo de serviços da empresa</small></span></div><span className="role-pill">{sites.length} serviços</span></div><p>Cadastre os serviços disponíveis para vincular aos clientes e seus valores.</p><div className="service-card-stats"><span><strong>{sites.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{sites.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
         <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon orange">✳</span><span><strong>Bots e automações</strong><small>Catálogo de serviços da empresa</small></span></div><span className="role-pill">{bots.length} serviços</span></div><p>Cadastre bots e automações e selecione-os depois no cadastro do cliente.</p><div className="service-card-stats"><span><strong>{bots.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{bots.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
@@ -837,7 +837,7 @@ export default function App() {
           <div className="nav-section-label">GESTÃO</div>
           <button className={`nav-item${currentPage === "clients" ? " is-active" : ""}`} type="button" data-page="clients" aria-current={currentPage === "clients" ? "page" : undefined} onClick={() => navigate("clients")}><span className="nav-icon" aria-hidden="true">◎</span><span>Clientes</span><span className="nav-count">{data.clients.length}</span></button>
           <button className={`nav-item${currentPage === "finance" ? " is-active" : ""}`} type="button" data-page="finance" aria-current={currentPage === "finance" ? "page" : undefined} onClick={() => navigate("finance")}><span className="nav-icon" aria-hidden="true">R$</span><span>Financeiro</span></button>
-          <button className={`nav-item${currentPage === "services" ? " is-active" : ""}`} type="button" data-page="services" aria-current={currentPage === "services" ? "page" : undefined} onClick={() => navigate("services")}><span className="nav-icon" aria-hidden="true">⌘</span><span>Bots e sites</span></button>
+          <button className={`nav-item${currentPage === "services" ? " is-active" : ""}`} type="button" data-page="services" aria-current={currentPage === "services" ? "page" : undefined} onClick={() => navigate("services")}><span className="nav-icon" aria-hidden="true">⌘</span><span>Serviços</span></button>
           <button className={`nav-item${currentPage === "team" ? " is-active" : ""}`} type="button" data-page="team" aria-current={currentPage === "team" ? "page" : undefined} onClick={() => navigate("team")}><span className="nav-icon" aria-hidden="true">♙</span><span>Equipe</span></button>
         </nav>
         <div className="sidebar-bottom">
@@ -864,7 +864,7 @@ export default function App() {
         </header>
         <main className="page-content" id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
-          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Bots e sites antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
+          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
           {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?`)} />}
           {currentPage === "services" && <ServicesPage {...common} onNew={() => setDialogType("service")} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}

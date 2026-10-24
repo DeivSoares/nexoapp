@@ -49,7 +49,7 @@ O ID do documento deve ser o UID exato da conta, e a coleção `companyMembershi
 
 ## Nome, privilégio e foto no perfil
 
-Na aba **Bots e sites**, cada serviço é cadastrado como um documento separado em `companies/{companyId}/services/{serviceId}` e fica compartilhado entre as contas da empresa. O cadastro do serviço inclui nome, tipo, mensalidade, valor fixo/de entrada e status; não inclui cliente nem data de renovação. Ao cadastrar um cliente, selecione um serviço do catálogo. A seleção preenche os valores, que podem ser ajustados para aquele cliente. Clientes antigos continuam exibindo o serviço já salvo.
+Na aba **Serviços**, cada serviço é cadastrado como um documento separado em `companies/{companyId}/services/{serviceId}` e fica compartilhado entre as contas da empresa. O cadastro do serviço inclui nome, tipo, mensalidade, valor fixo/de entrada e status; não inclui cliente nem data de renovação. Ao cadastrar um cliente, selecione um serviço do catálogo. A seleção preenche os valores, que podem ser ajustados para aquele cliente. Clientes antigos continuam exibindo o serviço já salvo.
 
 No Sidebar, o Nexo exibe o nome registrado para a pessoa na aba Equipe ou o campo `usuario` do vínculo `companyMemberships/{UID}`. A função da pessoa é exibida como privilégio; se não houver registro de equipe, o app usa **Administrador** quando `canManageUsers` for `true` e **Membro** nos demais casos. Para uma conta vinculada manualmente, preencha `usuario` com o nome que deseja exibir.
 
