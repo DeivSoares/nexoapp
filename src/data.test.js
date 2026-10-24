@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   confirmClientRenewal,
+  getUpcomingRenewals,
   isRenewalDue,
   markDueRenewalsPending,
   syncClientRevenue,
@@ -15,6 +16,23 @@ const client = {
   entryAmount: 500,
   renewal: "2026-11-01",
 };
+
+test("lists valid renewals from today through the next ten days in date order", () => {
+  const today = new Date(2026, 9, 24, 23, 30);
+  const clients = [
+    { id: "outside-before", renewal: "2026-10-23" },
+    { id: "last-day", renewal: "2026-11-03" },
+    { id: "today", renewal: "2026-10-24" },
+    { id: "outside-after", renewal: "2026-11-04" },
+    { id: "invalid", renewal: "2026-10-32" },
+    { id: "missing" },
+  ];
+
+  assert.deepEqual(
+    getUpcomingRenewals(clients, 10, today).map(({ id }) => id),
+    ["today", "last-day"],
+  );
+});
 
 test("creates pending monthly and fixed income entries linked to the client", () => {
   const transactions = syncClientRevenue([], client);

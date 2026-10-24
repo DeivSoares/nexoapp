@@ -12,6 +12,7 @@ import {
   formatShortDate,
   getDateInDays,
   getMonthKey,
+  getUpcomingRenewals,
   isRenewalDue,
   loadData,
   markDueRenewalsPending,
@@ -24,6 +25,7 @@ import {
 import { getUserProfile, validateProfilePhotoUrl } from "./profile.js";
 
 const loginPath = `${import.meta.env.BASE_URL}login.html`;
+const themeStorageKey = "nexo-theme";
 
 const pages = {
   overview: "Visão geral",
@@ -32,6 +34,10 @@ const pages = {
   services: "Bots e sites",
   team: "Equipe",
 };
+
+function getSavedTheme() {
+  return window.localStorage.getItem(themeStorageKey) === "dark" ? "dark" : "light";
+}
 
 function Status({ value }) {
   const tone = value === "Ativo" || value === "Recebido" || value === "Pago" ? "" :
@@ -44,7 +50,10 @@ function PersonCell({ person, subtitle, tone = "avatar-blue" }) {
   const initials = person.initials || person.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
   return (
     <div className="table-person">
-      <span className={`avatar ${tone}`}>{initials}</span>
+      <span className={`avatar${person.photoUrl ? " profile-avatar" : ""} ${tone}`}>
+        {initials}
+        {person.photoUrl && <img src={person.photoUrl} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
+      </span>
       <span><strong>{person.name}</strong><small>{subtitle}</small></span>
     </div>
   );
@@ -163,6 +172,7 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
       title: client ? "Editar cliente" : "Novo cliente",
       fields: <>
         <Field label="Nome do cliente" name="name" full placeholder="Ex.: Mariana Costa" defaultValue={client?.name} />
+        <Field label="URL da imagem" name="photoUrl" type="url" full placeholder="https://exemplo.com/imagem.jpg" defaultValue={client?.photoUrl} required={false} />
         <Field label="Empresa" name="company" placeholder="Nome do negócio" defaultValue={client?.company} />
         <Field label="E-mail" name="email" type="email" placeholder="cliente@email.com" defaultValue={client?.email} required={false} />
         <Field label="WhatsApp" name="whatsapp" type="tel" placeholder="Ex.: +55 11 99999-9999" defaultValue={client?.whatsapp} required={false} />
@@ -308,10 +318,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
     .reduce((total, entry) => total + Number(entry.amount), 0);
   const pending = data.transactions.filter((entry) => entry.status === "Pendente").reduce((total, entry) => total + Number(entry.amount), 0);
   const activeServices = data.services.filter((service) => service.status === "Ativo").length;
-  const dueSoon = data.clients.filter((client) => {
-    const days = Math.ceil((new Date(`${client.renewal}T12:00:00`) - new Date(`${getDateInDays(0)}T12:00:00`)) / 86400000);
-    return days >= 0 && days <= 7;
-  });
+  const dueSoon = getUpcomingRenewals(data.clients);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toLocaleUpperCase("pt-BR");
   const greeting = today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite";
@@ -356,7 +363,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
         </DataTable>
       </section>
       <section className="panel table-panel" style={{ marginTop: 16 }}>
-        <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 7 dias</p></div></div>
+        <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 10 dias</p></div></div>
         <DataTable columns={["CLIENTE", "SERVIÇO", "RENOVAÇÃO", "VALOR", "STATUS"]}>
           {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td>{client.plan}</td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
           {!dueSoon.length && <tr><td colSpan="5" className="empty-state">Nenhuma renovação nos próximos dias.</td></tr>}
@@ -471,6 +478,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [currentPage, setCurrentPage] = useState("overview");
   const [searchTerm, setSearchTerm] = useState("");
+  const [theme, setTheme] = useState(getSavedTheme);
   const [dialogType, setDialogType] = useState("");
   const [editingClient, setEditingClient] = useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
@@ -480,6 +488,12 @@ export default function App() {
   const [loggingOut, setLoggingOut] = useState(false);
   const dataRef = useRef(null);
   const writeQueueRef = useRef(Promise.resolve());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(themeStorageKey, theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#101522" : "#f5f7fb");
+  }, [theme]);
 
   useEffect(() => {
     if (!firebaseConfigured || !firebaseAuth) {
@@ -671,6 +685,7 @@ export default function App() {
           plan: selectedService?.name || clientToUpdate?.plan || "",
           id: clientToUpdate?.id || createId("c"),
           name: normalizedName,
+          photoUrl: validateProfilePhotoUrl(values.photoUrl || ""),
           email: values.email.trim(),
           whatsapp: values.whatsapp.trim(),
           discord: values.discord.trim(),
@@ -840,6 +855,9 @@ export default function App() {
           <div className="breadcrumbs"><span>Nexo</span><span aria-hidden="true">/</span><strong>{pages[currentPage]}</strong></div>
           <div className="topbar-actions">
             <label className="search-box"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Buscar..." autoComplete="off" aria-label="Buscar nesta página" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /><kbd>Ctrl K</kbd></label>
+            <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} aria-label={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} title={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} aria-pressed={theme === "dark"}>
+              <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span><span className="theme-toggle-label">{theme === "light" ? "Dark" : "Light"}</span>
+            </button>
             <button className="icon-button notification-button" type="button" aria-label="Notificações"><span aria-hidden="true">♧</span><i /></button>
             <ProfileAvatar profile={profile} className="top-avatar" />
           </div>

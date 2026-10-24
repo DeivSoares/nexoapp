@@ -304,3 +304,20 @@ export function getMonthKey(offset = 0) {
 export function getDateInDays(days) {
   return dateInDays(days);
 }
+
+export function getUpcomingRenewals(clients, days = 10, today = new Date()) {
+  const todayKey = localDateString(today);
+  const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  cutoff.setDate(cutoff.getDate() + days);
+  const cutoffKey = localDateString(cutoff);
+
+  return clients
+    .filter((client) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(client.renewal || "")) return false;
+      const [year, month, day] = client.renewal.split("-").map(Number);
+      const renewal = new Date(year, month - 1, day);
+      if (renewal.getFullYear() !== year || renewal.getMonth() !== month - 1 || renewal.getDate() !== day) return false;
+      return client.renewal >= todayKey && client.renewal <= cutoffKey;
+    })
+    .sort((first, second) => first.renewal.localeCompare(second.renewal));
+}
