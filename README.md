@@ -23,7 +23,7 @@
 <br>
 
 <p align="center">
-  <img src="./docs/images/login.png" alt="Tela de acesso do Nexo Gestão" width="850">
+  <img src="./docs/images/login-page.png" alt="Tela de acesso do Nexo Gestão" width="850">
 </p>
 
 ## Sobre o projeto
