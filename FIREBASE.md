@@ -1,13 +1,13 @@
 # Firebase Authentication e Firestore
 
-O Nexo autentica por usuário e senha usando diretamente o Firebase Authentication e salva os dados do app no Cloud Firestore. Cada empresa tem um `companyId`; contas vinculadas ao mesmo identificador compartilham clientes, financeiro, serviços, atividades e equipe. Empresas com identificadores diferentes permanecem isoladas. A configuração funciona no plano Spark, sem Cloud Functions, App Check ou plano Blaze.
+O Nexo autentica por usuário e senha usando diretamente o Firebase Authentication e salva os dados do app no Cloud Firestore. Cada empresa tem um `companyId`; contas vinculadas ao mesmo identificador compartilham clientes, financeiro, serviços, atividades e equipe. Os serviços de catálogo são documentos separados em `companies/{companyId}/services/{serviceId}`. Empresas com identificadores diferentes permanecem isoladas. A configuração funciona no plano Spark, sem Cloud Functions, App Check ou plano Blaze.
 
 ## Configurar o Firebase no plano Spark
 
 1. No [Firebase Console](https://console.firebase.google.com/), crie ou selecione o projeto gratuito.
 2. Em **Authentication → Sign-in method**, habilite **E-mail/senha**.
 3. Em **Firestore Database**, crie um banco de dados no modo de produção. O Firestore tem cota gratuita no plano Spark; não habilite o Blaze para seguir estes passos.
-4. Na aba **Regras** do Firestore, substitua as regras existentes pelo conteúdo completo de [`firestore.rules`](./firestore.rules) e clique em **Publicar**. As regras exigem um vínculo por UID em `companyMemberships` e autorizam o acesso somente aos dados da empresa desse vínculo.
+4. Na aba **Regras** do Firestore, substitua as regras existentes pelo conteúdo completo de [`firestore.rules`](./firestore.rules) e clique em **Publicar**. As regras exigem um vínculo por UID em `companyMemberships` e autorizam o acesso somente aos dados da empresa desse vínculo. As regras atuais também permitem que cada conta altere somente sua própria URL de foto (`photoUrl`) no vínculo.
 5. Em **Configurações do projeto → Seus apps**, registre um app Web.
 6. Copie a configuração do app Web para `.env.local`. O projeto atual tem um exemplo em `.env.example`; confirme que o `projectId` corresponde ao projeto desejado.
 
@@ -39,11 +39,21 @@ O usuário que realiza o cadastro precisa ter `canManageUsers: true` no próprio
 
 As contas criadas por essa tela não recebem e-mail de recuperação, porque usam e-mails técnicos. O administrador deve redefinir senhas pelo Firebase Console. A função **Administrador** permite criar usuários; as funções não restringem o acesso às outras telas do app.
 
+Ao remover um membro criado pelo Nexo, o app exclui em uma transação o registro da equipe e `companyMemberships/{UID}`. A pessoa perde acesso aos dados da empresa e a sessão aberta é encerrada quando o Firestore detecta a remoção. A conta de autenticação permanece em **Authentication → Users** e pode ser excluída manualmente pelo administrador; a exclusão de outras contas do Firebase Authentication exige acesso administrativo de servidor e não é feita pelo app web. Membros antigos sem UID salvo podem ser removidos da lista, mas precisam ter o vínculo e a conta revogados manualmente no Console.
+
 ### Vincular contas que já existem
 
 Para cada conta existente criada diretamente no Firebase Console, crie/edite `companyMemberships/{UID}` com `companyId` igual ao da empresa, `active: true` e `canManageUsers: false`. Para permitir que uma conta existente gerencie cadastros, o administrador pode definir `canManageUsers: true` manualmente no Console.
 
 O ID do documento deve ser o UID exato da conta, e a coleção `companyMemberships` fica no nível principal do Firestore, ao lado de `companies` e `nexoUsers`.
+
+## Nome, privilégio e foto no perfil
+
+Na aba **Bots e sites**, cada serviço é cadastrado como um documento separado em `companies/{companyId}/services/{serviceId}` e fica compartilhado entre as contas da empresa. O cadastro do serviço inclui nome, tipo, mensalidade, valor fixo/de entrada e status; não inclui cliente nem data de renovação. Ao cadastrar um cliente, selecione um serviço do catálogo. A seleção preenche os valores, que podem ser ajustados para aquele cliente. Clientes antigos continuam exibindo o serviço já salvo.
+
+No Sidebar, o Nexo exibe o nome registrado para a pessoa na aba Equipe ou o campo `usuario` do vínculo `companyMemberships/{UID}`. A função da pessoa é exibida como privilégio; se não houver registro de equipe, o app usa **Administrador** quando `canManageUsers` for `true` e **Membro** nos demais casos. Para uma conta vinculada manualmente, preencha `usuario` com o nome que deseja exibir.
+
+Clique no nome ou no avatar do Sidebar para informar uma URL pública da imagem. O valor é salvo no campo `photoUrl` do vínculo daquela conta; deixe o campo vazio para remover a foto. Use uma URL direta `http://` ou `https://` com no máximo 2048 caracteres. Para aplicar esta edição em um projeto já configurado, publique também as regras atualizadas de [`firestore.rules`](./firestore.rules) no Console do Firebase e publique a nova versão do app.
 
 ### Contas que já existiam
 

@@ -74,10 +74,55 @@ export async function createTeamMemberAccount(uid, username, password, member, u
   }
 }
 
-export async function subscribeData(uid, onData, onError) {
+export async function deleteTeamMemberAccount(uid, memberUid, update) {
+  const { deleteCloudTeamMember } = await import("./cloudData.js");
+  try {
+    return await deleteCloudTeamMember(uid, memberUid, update, validateData);
+  } catch (error) {
+    throw getCloudDataError(error);
+  }
+}
+
+export async function createService(uid, service) {
+  const { createCloudService } = await import("./cloudData.js");
+  try {
+    await createCloudService(uid, service);
+  } catch (error) {
+    throw getCloudDataError(error);
+  }
+}
+
+export async function updateService(uid, serviceId, changes) {
+  const { updateCloudService } = await import("./cloudData.js");
+  try {
+    await updateCloudService(uid, serviceId, changes);
+  } catch (error) {
+    throw getCloudDataError(error);
+  }
+}
+
+export async function deleteService(uid, serviceId) {
+  const { deleteCloudService } = await import("./cloudData.js");
+  try {
+    await deleteCloudService(uid, serviceId);
+  } catch (error) {
+    throw getCloudDataError(error);
+  }
+}
+
+export async function updateProfilePhoto(uid, photoUrl) {
+  const { updateCloudProfilePhoto } = await import("./cloudData.js");
+  try {
+    await updateCloudProfilePhoto(uid, photoUrl);
+  } catch (error) {
+    throw getCloudDataError(error);
+  }
+}
+
+export async function subscribeData(uid, onData, onError, onMembership = () => {}) {
   try {
     const { subscribeCloudData } = await import("./cloudData.js");
-    return subscribeCloudData(uid, onData, (error) => onError(getCloudDataError(error)), validateData);
+    return subscribeCloudData(uid, onData, (error) => onError(getCloudDataError(error)), validateData, onMembership);
   } catch (error) {
     onError(getCloudDataError(error));
     return () => {};

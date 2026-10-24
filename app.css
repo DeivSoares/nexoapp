@@ -52,6 +52,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .help-card p { margin: 6px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .profile { display: flex; align-items: center; gap: 10px; margin-top: 17px; padding: 14px 5px 0; border-top: 1px solid var(--line); }
 .avatar { display: grid; flex: 0 0 auto; width: 35px; height: 35px; place-items: center; border-radius: 50%; font-size: 11px; font-weight: 700; }
+.profile-avatar { position: relative; overflow: hidden; }
+.profile-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .avatar-purple { background: #ecebff; color: #6459c8; }
 .avatar-blue { background: #e9f1ff; color: #4673ca; }
 .avatar-green { background: #e5f6ef; color: #25835f; }
@@ -59,6 +61,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .profile-copy { display: grid; gap: 3px; min-width: 0; }
 .profile-copy strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .profile-copy small { color: var(--muted); font-size: 10px; }
+.profile-edit-button,.profile-details-button { padding: 0; border: 0; background: transparent; text-align: left; }
+.profile-edit-button { display: grid; flex: 0 0 auto; border-radius: 50%; }
+.profile-edit-button:focus-visible,.profile-details-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.profile-details-button { flex: 1; cursor: pointer; }
+.profile-details-button:hover strong { color: var(--blue); }
 .logout-button { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; margin-left: auto; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #8c94a5; font-size: 18px; }
 .logout-button:hover { border-color: #ffe1e4; background: var(--red-soft); color: var(--red); }
 .main-column { min-height: 100vh; margin-left: 252px; }

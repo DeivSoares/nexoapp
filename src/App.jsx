@@ -4,7 +4,10 @@ import { firebaseAuth, firebaseConfigured } from "./firebase.js";
 import {
   createId,
   confirmClientRenewal,
+  createService,
   createTeamMemberAccount,
+  deleteService,
+  deleteTeamMemberAccount,
   formatCurrency,
   formatShortDate,
   getDateInDays,
@@ -15,7 +18,10 @@ import {
   syncClientRevenue,
   subscribeData,
   updateData,
+  updateProfilePhoto,
+  updateService,
 } from "./data.js";
+import { getUserProfile, validateProfilePhotoUrl } from "./profile.js";
 
 const loginPath = `${import.meta.env.BASE_URL}login.html`;
 
@@ -112,17 +118,35 @@ function Field({ label, name, type = "text", choices, full = false, placeholder,
     <div className={`form-field${full ? " full" : ""}`}>
       <label htmlFor={`field-${name}`}>{label}</label>
       {choices
-        ? <select id={`field-${name}`} name={name} required={required} defaultValue={defaultValue ?? choices[0]} onChange={onChange}>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select>
+        ? <select id={`field-${name}`} name={name} required={required} defaultValue={defaultValue ?? (typeof choices[0] === "string" ? choices[0] : choices[0]?.value)} onChange={onChange}>{choices.map((choice) => typeof choice === "string" ? <option key={choice} value={choice}>{choice}</option> : <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</select>
         : <input id={`field-${name}`} name={name} type={type} required={required} min={min} minLength={minLength} step={step} defaultValue={defaultValue} placeholder={placeholder} />}
     </div>
   );
 }
 
-function EntryDialog({ type, clients, client, onClose, onSave }) {
+function EntryDialog({ type, services = [], client, onClose, onSave }) {
   const dialogRef = useRef(null);
   const [transactionType, setTransactionType] = useState("Receita");
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const matchedClientService = services.find((service) => service.id === client?.serviceId || service.name === client?.plan);
+  const clientServiceChoices = [
+    { value: "", label: services.length ? "Selecione um serviço" : "Nenhum serviço cadastrado", disabled: true },
+    ...services.map((service) => ({ value: service.id, label: service.name })),
+    ...(client?.plan && !matchedClientService ? [{ value: "__existing__", label: client.plan }] : []),
+  ];
+
+  function applyServicePrices(event) {
+    const service = services.find((item) => item.id === event.currentTarget.value);
+    const form = event.currentTarget.form;
+    if (service) {
+      form.elements.namedItem("monthly").value = Number(service.monthly || 0);
+      form.elements.namedItem("entryAmount").value = Number(service.entryAmount || 0);
+    } else if (event.currentTarget.value === "__existing__" && client) {
+      form.elements.namedItem("monthly").value = Number(client.monthly || 0);
+      form.elements.namedItem("entryAmount").value = Number(client.entryAmount || 0);
+    }
+  }
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -141,8 +165,9 @@ function EntryDialog({ type, clients, client, onClose, onSave }) {
         <Field label="Nome do cliente" name="name" full placeholder="Ex.: Mariana Costa" defaultValue={client?.name} />
         <Field label="Empresa" name="company" placeholder="Nome do negócio" defaultValue={client?.company} />
         <Field label="E-mail" name="email" type="email" placeholder="cliente@email.com" defaultValue={client?.email} required={false} />
+        <Field label="WhatsApp" name="whatsapp" type="tel" placeholder="Ex.: +55 11 99999-9999" defaultValue={client?.whatsapp} required={false} />
         <Field label="Discord (usuário)" name="discord" placeholder="Ex.: usuario" defaultValue={client?.discord} required={false} />
-        <Field label="Serviço / contrato" name="plan" full placeholder="Ex.: Site institucional" defaultValue={client?.plan} />
+        <Field label="Serviço / contrato" name="serviceId" choices={clientServiceChoices} full defaultValue={matchedClientService?.id || (client?.plan ? "__existing__" : "")} onChange={applyServicePrices} />
         <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={client?.monthly} />
         <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={client?.entryAmount ?? 0} required={false} />
         <Field label="Próxima renovação" name="renewal" type="date" defaultValue={client?.renewal ?? getDateInDays(0)} />
@@ -165,9 +190,8 @@ function EntryDialog({ type, clients, client, onClose, onSave }) {
       fields: <>
         <Field label="Nome do serviço" name="name" full placeholder="Ex.: Site institucional" />
         <Field label="Tipo" name="type" choices={["Site", "Bot"]} />
-        <Field label="Cliente" name="client" choices={clients.map((client) => client.company)} />
         <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" />
-        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={getDateInDays(0)} />
+        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" required={false} />
         <Field label="Status" name="status" choices={["Ativo", "Em implantação", "Inativo"]} />
       </>,
     },
@@ -207,6 +231,7 @@ function EntryDialog({ type, clients, client, onClose, onSave }) {
         </div>
         <div className="dialog-fields">{config.fields}</div>
         {type === "member" && <p className="security-note">O usuário entrará pelo nome de usuário e senha. A senha não será salva nos dados da equipe.</p>}
+        {type === "client" && !services.length && <p className="security-note">Cadastre um serviço na aba Bots e sites antes de adicionar um cliente.</p>}
         {submitError && <p className="form-error" role="alert">{submitError}</p>}
         <div className="dialog-actions">
           <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
@@ -214,6 +239,66 @@ function EntryDialog({ type, clients, client, onClose, onSave }) {
         </div>
       </form>
     </dialog>
+  );
+}
+
+function ProfilePhotoDialog({ photoUrl, onClose, onSave }) {
+  const dialogRef = useRef(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    dialog.showModal();
+    dialog.querySelector("input")?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const values = new FormData(event.currentTarget);
+      const url = validateProfilePhotoUrl(String(values.get("photoUrl") || ""));
+      await onSave(url);
+    } catch (saveError) {
+      setError(saveError.message || "Não foi possível salvar a foto.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <dialog className="app-dialog" ref={dialogRef} aria-labelledby="profile-dialog-title" onCancel={onClose} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <form className="dialog-card" onSubmit={handleSubmit}>
+        <div className="dialog-heading">
+          <div><span className="eyebrow">MEU PERFIL</span><h2 id="profile-dialog-title">Foto de perfil</h2></div>
+          <button className="icon-button dialog-close" type="button" onClick={onClose} aria-label="Fechar">×</button>
+        </div>
+        <div className="dialog-fields">
+          <Field label="URL da imagem" name="photoUrl" type="url" full placeholder="https://exemplo.com/minha-foto.jpg" defaultValue={photoUrl} required={false} />
+        </div>
+        <p className="security-note">Use um link público direto para a imagem. Deixe vazio para remover a foto.</p>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="dialog-actions">
+          <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar foto"}</button>
+        </div>
+      </form>
+    </dialog>
+  );
+}
+
+function ProfileAvatar({ profile, className = "" }) {
+  return (
+    <span className={`avatar avatar-purple${className ? ` ${className}` : ""} profile-avatar`}>
+      {profile.initials}
+      {profile.photoUrl && <img src={profile.photoUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />}
+    </span>
   );
 }
 
@@ -331,25 +416,25 @@ function FinancePage({ data, search, onNew, onDelete }) {
 }
 
 function ServicesPage({ data, search, onNew, onDelete, onToggle }) {
-  const services = data.services.filter((service) => [service.name, service.type, service.client, service.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
+  const services = data.services.filter((service) => [service.name, service.type, service.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
   const sites = data.services.filter((service) => service.type === "Site");
   const bots = data.services.filter((service) => service.type === "Bot");
   return (
     <>
       <PageHeading title="Bots e sites" description="Acompanhe os serviços e projetos da sua operação." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo serviço</button>} />
       <section className="service-grid">
-        <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon">⌘</span><span><strong>Sites e aplicações</strong><small>Presença digital dos clientes</small></span></div><span className="role-pill">{sites.length} projetos</span></div><p>Gerencie projetos web, hospedagem, contratos e próximos vencimentos.</p><div className="service-card-stats"><span><strong>{sites.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{sites.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
-        <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon orange">✳</span><span><strong>Bots e automações</strong><small>Serviços conectados</small></span></div><span className="role-pill">{bots.length} projetos</span></div><p>Acompanhe bots personalizados, seus clientes e status de operação.</p><div className="service-card-stats"><span><strong>{bots.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{bots.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
+        <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon">⌘</span><span><strong>Sites e aplicações</strong><small>Catálogo de serviços da empresa</small></span></div><span className="role-pill">{sites.length} serviços</span></div><p>Cadastre os serviços disponíveis para vincular aos clientes e seus valores.</p><div className="service-card-stats"><span><strong>{sites.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{sites.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
+        <article className="service-card"><div className="service-card-top"><div className="service-card-title"><span className="metric-icon orange">✳</span><span><strong>Bots e automações</strong><small>Catálogo de serviços da empresa</small></span></div><span className="role-pill">{bots.length} serviços</span></div><p>Cadastre bots e automações e selecione-os depois no cadastro do cliente.</p><div className="service-card-stats"><span><strong>{bots.filter((item) => item.status === "Ativo").length}</strong>Ativos</span><span><strong>{bots.filter((item) => item.status !== "Ativo").length}</strong>Em implantação</span></div></article>
       </section>
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2>Serviços cadastrados</h2><p>{services.length} de {data.services.length} registros</p></div></div>
-        <DataTable columns={["SERVIÇO", "TIPO", "CLIENTE", "MENSALIDADE", "RENOVAÇÃO", "STATUS", "AÇÕES"]}>
+        <DataTable columns={["SERVIÇO", "TIPO", "MENSALIDADE", "VALOR FIXO", "STATUS", "AÇÕES"]}>
           {services.map((service) => <tr key={service.id}>
-            <td><strong className="table-strong">{service.name}</strong></td><td>{service.type}</td><td>{service.client}</td><td>{formatCurrency(service.monthly)}</td><td>{formatShortDate(service.renewal)}</td>
+            <td><strong className="table-strong">{service.name}</strong></td><td>{service.type}</td><td>{formatCurrency(service.monthly)}</td><td>{formatCurrency(service.entryAmount)}</td>
             <td><button className="status-button" type="button" onClick={() => onToggle(service)} aria-label={`Alterar status de ${service.name}`}><Status value={service.status} /></button></td>
             <td><button className="row-action" type="button" onClick={() => onDelete(service)} aria-label={`Excluir ${service.name}`}>×</button></td>
           </tr>)}
-          {!services.length && <tr><td colSpan="7" className="empty-state">{data.services.length ? "Nenhum serviço encontrado." : "Cadastre seu primeiro serviço."}</td></tr>}
+          {!services.length && <tr><td colSpan="6" className="empty-state">{data.services.length ? "Nenhum serviço encontrado." : "Cadastre seu primeiro serviço."}</td></tr>}
         </DataTable>
       </section>
     </>
@@ -382,11 +467,13 @@ function TeamPage({ data, search, onNew, onDelete }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [data, setData] = useState(null);
+  const [membership, setMembership] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentPage, setCurrentPage] = useState("overview");
   const [searchTerm, setSearchTerm] = useState("");
   const [dialogType, setDialogType] = useState("");
   const [editingClient, setEditingClient] = useState(null);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [storageError, setStorageError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -406,6 +493,7 @@ export default function App() {
         return;
       }
       setUser(authenticatedUser);
+      setMembership(null);
       setAuthReady(false);
       setData(null);
       dataRef.current = null;
@@ -460,7 +548,18 @@ export default function App() {
       setStorageError("");
     }, (error) => {
       console.error("Não foi possível sincronizar os dados compartilhados da empresa.", error);
+      if (error.code === "membership/not-found") {
+        signOut(firebaseAuth)
+          .then(() => window.location.replace(loginPath))
+          .catch((signOutError) => {
+            console.error("Não foi possível encerrar a sessão sem vínculo de empresa.", signOutError);
+            if (active) setStorageError("O vínculo com a empresa foi removido. Encerre a sessão e entre novamente.");
+          });
+        return;
+      }
       if (active) setToast("A sincronização com o Firebase falhou. Verifique as regras e sua conexão.");
+    }, (accountMembership) => {
+      if (active) setMembership(accountMembership);
     }).then((stop) => {
       unsubscribe = stop;
       if (!active) unsubscribe();
@@ -547,15 +646,33 @@ export default function App() {
       setDialogType("");
       return;
     }
+    if (type === "service") {
+      const service = {
+        id: createId("s"),
+        name: normalizedName,
+        type: values.type,
+        monthly: Number(values.monthly),
+        entryAmount: Number(values.entryAmount || 0),
+        status: values.status,
+      };
+      await createService(user.uid, service);
+      commit((current) => addActivity(current, `Serviço ${normalizedName} adicionado`), "Serviço cadastrado com sucesso.");
+      setDialogType("");
+      return;
+    }
 
     commit((current) => {
       if (type === "client") {
+        const selectedService = dataRef.current?.services.find((service) => service.id === values.serviceId);
         const savedClient = {
           ...clientToUpdate,
           ...values,
+          serviceId: selectedService?.id || clientToUpdate?.serviceId || "",
+          plan: selectedService?.name || clientToUpdate?.plan || "",
           id: clientToUpdate?.id || createId("c"),
           name: normalizedName,
           email: values.email.trim(),
+          whatsapp: values.whatsapp.trim(),
           discord: values.discord.trim(),
           monthly: Number(values.monthly),
           entryAmount: Number(values.entryAmount || 0),
@@ -575,10 +692,6 @@ export default function App() {
         const next = { ...current, transactions: [...current.transactions, { id: createId("t"), ...values, amount: Number(values.amount), type: values.type === "Receita" ? "income" : "expense" }] };
         return addActivity(next, `Novo lançamento: ${values.description}`, "orange");
       }
-      if (type === "service") {
-        const next = { ...current, services: [...current.services, { id: createId("s"), ...values, monthly: Number(values.monthly) }] };
-        return addActivity(next, `Serviço ${values.name} adicionado`);
-      }
       const member = { id: createId("u"), ...values, name: normalizedName, initials: normalizedName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(), tone: "avatar-blue", status: "Ativo" };
       const next = { ...current, team: [...current.team, member] };
       return addActivity(next, `${normalizedName} foi adicionado à equipe`);
@@ -594,9 +707,17 @@ export default function App() {
 
   function deleteItem(collection, item, label) {
     if (!window.confirm(label)) return;
+    if (collection === "services") {
+      deleteService(user.uid, item.id).then(() => {
+        commit((current) => addActivity(current, `Serviço ${item.name} removido`, "orange"), "Serviço removido.");
+      }).catch((error) => {
+        console.error("Não foi possível excluir o serviço no Firebase.", error);
+        setToast(error.message || "Não foi possível excluir o serviço. Verifique sua conexão.");
+      });
+      return;
+    }
     commit((current) => {
       let next = { ...current, [collection]: current[collection].filter((entry) => entry.id !== item.id) };
-      if (collection === "clients") next = { ...next, services: next.services.filter((service) => service.client !== item.company) };
       if (collection === "clients") next = addActivity(next, `Cliente ${item.name} removido`, "orange");
       return next;
     }, "Registro removido.");
@@ -609,19 +730,44 @@ export default function App() {
     }, "Renovação confirmada. Cliente reativado e mensalidade marcada como recebida.");
   }
 
-  function deleteMember(member) {
+  async function deleteMember(member) {
     if (member.role === "Administrador" && data.team.filter((person) => person.role === "Administrador").length === 1) {
       setToast("Mantenha pelo menos uma pessoa administradora.");
       return;
     }
-    deleteItem("team", member, `Remover ${member.name} da equipe?`);
+    if (!window.confirm(`Remover ${member.name} da equipe? A pessoa perderá o acesso ao Nexo desta empresa.`)) return;
+    if (!member.authUid) {
+      commit((current) => {
+        const team = current.team.filter((person) => person.id !== member.id);
+        if (team.length === current.team.length) return current;
+        return addActivity({ ...current, team }, `${member.name} foi removido da equipe`, "orange");
+      }, "Membro removido da lista. A conta Firebase antiga precisa ser removida manualmente no Console.");
+      return;
+    }
+
+    try {
+      await writeQueueRef.current;
+      const next = await deleteTeamMemberAccount(user.uid, member.authUid, (current) => {
+        const team = current.team.filter((person) => person.id !== member.id);
+        if (team.length === current.team.length) return current;
+        return addActivity({ ...current, team }, `${member.name} foi removido da equipe`, "orange");
+      });
+      dataRef.current = next;
+      setData(next);
+      setToast(`${member.name} foi removido da equipe e perdeu o vínculo com a empresa.`);
+    } catch (error) {
+      console.error("Não foi possível remover o membro da equipe no Firebase.", error);
+      setToast(error.message || "Não foi possível remover o membro. Verifique sua conexão e as regras do Firestore.");
+    }
   }
 
   function toggleService(service) {
-    commit((current) => ({
-      ...current,
-      services: current.services.map((entry) => entry.id === service.id ? { ...entry, status: entry.status === "Ativo" ? "Inativo" : "Ativo" } : entry),
-    }), `Serviço ${service.status === "Ativo" ? "desativado" : "ativado"}.`);
+    updateService(user.uid, service.id, { status: service.status === "Ativo" ? "Inativo" : "Ativo" })
+      .then(() => setToast(`Serviço ${service.status === "Ativo" ? "desativado" : "ativado"}.`))
+      .catch((error) => {
+        console.error("Não foi possível atualizar o serviço no Firebase.", error);
+        setToast(error.message || "Não foi possível atualizar o serviço. Verifique sua conexão.");
+      });
   }
 
   function navigate(page) {
@@ -642,14 +788,14 @@ export default function App() {
     }
   }
 
-  const profile = useMemo(() => {
-    const label = user?.displayName || user?.email || "Conta Nexo";
-    return {
-      name: user?.displayName || "Conta Nexo",
-      email: user?.email || "Sessão autenticada",
-      initials: label.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "N",
-    };
-  }, [user]);
+  async function handleProfilePhotoSave(photoUrl) {
+    await updateProfilePhoto(user.uid, photoUrl);
+    setMembership((current) => ({ ...current, photoUrl }));
+    setProfileDialogOpen(false);
+    setToast(photoUrl ? "Foto de perfil atualizada." : "Foto de perfil removida.");
+  }
+
+  const profile = useMemo(() => getUserProfile(user, data, membership), [user, data, membership]);
 
   if (!authReady || !user) return <div className="auth-loading" role="status">Verificando acesso...</div>;
   if (storageError) {
@@ -681,7 +827,11 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="help-card"><span className="help-icon" aria-hidden="true">✳</span><strong>Organize sua operação</strong><p>Clientes, serviços e financeiro em um só lugar.</p></div>
-          <div className="profile"><span className="avatar avatar-purple">{profile.initials}</span><span className="profile-copy"><strong>{profile.name}</strong><small>{profile.email}</small></span><button className="logout-button" type="button" disabled={loggingOut} onClick={handleSignOut} aria-label="Sair da conta" title="Sair da conta">⇥</button></div>
+          <div className="profile">
+            <button className="profile-edit-button" type="button" onClick={() => setProfileDialogOpen(true)} aria-label="Alterar foto de perfil" title="Alterar foto de perfil"><ProfileAvatar profile={profile} /></button>
+            <button className="profile-copy profile-details-button" type="button" onClick={() => setProfileDialogOpen(true)} aria-label="Alterar foto de perfil"><strong>{profile.name}</strong><small>{profile.privilege}</small></button>
+            <button className="logout-button" type="button" disabled={loggingOut} onClick={handleSignOut} aria-label="Sair da conta" title="Sair da conta">⇥</button>
+          </div>
         </div>
       </aside>
       <div className="main-column">
@@ -691,19 +841,20 @@ export default function App() {
           <div className="topbar-actions">
             <label className="search-box"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Buscar..." autoComplete="off" aria-label="Buscar nesta página" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /><kbd>Ctrl K</kbd></label>
             <button className="icon-button notification-button" type="button" aria-label="Notificações"><span aria-hidden="true">♧</span><i /></button>
-            <span className="avatar avatar-purple top-avatar">{profile.initials}</span>
+            <ProfileAvatar profile={profile} className="top-avatar" />
           </div>
         </header>
         <main className="page-content" id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
-          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
+          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Bots e sites antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
           {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?`)} />}
-          {currentPage === "services" && <ServicesPage {...common} onNew={() => data.clients.length ? setDialogType("service") : setToast("Cadastre um cliente antes de vincular um serviço.")} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
+          {currentPage === "services" && <ServicesPage {...common} onNew={() => setDialogType("service")} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}
         </main>
         <footer className="page-footer"><span>Nexo Gestão</span><span>Uma operação mais conectada.</span></footer>
       </div>
-      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || "new"}`} type={dialogType} clients={data.clients} client={dialogType === "client" ? editingClient : null} onClose={() => { setDialogType(""); setEditingClient(null); }} onSave={handleSave} />}
+      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || "new"}`} type={dialogType} services={data.services} client={dialogType === "client" ? editingClient : null} onClose={() => { setDialogType(""); setEditingClient(null); }} onSave={handleSave} />}
+      {profileDialogOpen && <ProfilePhotoDialog photoUrl={profile.photoUrl} onClose={() => setProfileDialogOpen(false)} onSave={handleProfilePhotoSave} />}
       {toast && <div className="toast is-visible" role="status" aria-live="polite">{toast}</div>}
     </div>
   );

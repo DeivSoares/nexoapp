@@ -32,10 +32,19 @@ service cloud.firestore {
         && request.resource.data.active is bool
         && request.resource.data.keys().hasOnly(['companyId', 'active', 'canManageUsers', 'usuario'])
         && (!request.resource.data.keys().hasAny(['usuario']) || request.resource.data.usuario is string);
+      allow update: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['photoUrl'])
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoUrl.size() <= 2048;
       allow delete: if managesCompanyUsers(resource.data.companyId);
     }
 
     match /companies/{companyId}/data/{documentId} {
+      allow read, write: if belongsToCompany(companyId);
+    }
+
+    match /companies/{companyId}/services/{serviceId} {
       allow read, write: if belongsToCompany(companyId);
     }
 
