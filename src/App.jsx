@@ -383,7 +383,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
 }
 
 function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }) {
-  const clients = data.clients.filter((client) => [client.name, client.company, client.email, client.discord, client.plan, client.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
+  const clients = data.clients.filter((client) => [client.name, client.company, client.email, client.whatsapp, client.discord, client.plan, client.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
   const activeMonthly = data.clients
     .filter((client) => client.status === "ATIVO" || String(client.status).startsWith("PRAZO "))
     .reduce((total, client) => total + Number(client.monthly), 0);
@@ -614,6 +614,13 @@ export default function App() {
   }, []);
 
   const search = searchTerm.trim().toLocaleLowerCase("pt-BR");
+
+  function submitSearch(event) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    setCurrentPage("clients");
+    setMenuOpen(false);
+  }
 
   function commit(update, message) {
     const operation = writeQueueRef.current.then(async () => {
@@ -871,7 +878,7 @@ export default function App() {
           <button className="mobile-menu" id="mobile-menu" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Abrir menu" aria-expanded={menuOpen}>☰</button>
           <div className="breadcrumbs"><span>Nexo</span><span aria-hidden="true">/</span><strong>{pages[currentPage]}</strong></div>
           <div className="topbar-actions">
-            <label className="search-box"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Buscar..." autoComplete="off" aria-label="Buscar nesta página" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} /><kbd>Ctrl K</kbd></label>
+            <label className="search-box"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Buscar clientes..." autoComplete="off" aria-label="Buscar clientes; pressione Enter para ver os resultados" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} onKeyDown={submitSearch} /><kbd>Enter</kbd></label>
             <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} aria-label={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} title={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} aria-pressed={theme === "dark"}>
               <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span><span className="theme-toggle-label">{theme === "light" ? "Dark" : "Light"}</span>
             </button>
