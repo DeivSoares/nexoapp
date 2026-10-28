@@ -161,33 +161,127 @@ export function createId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`;
 }
 
-export function syncClientRevenue(transactions, client) {
-  const revenueKinds = [
-    { kind: "monthly", amount: Number(client.monthly), category: "Mensalidade", description: `Mensalidade — ${client.company || client.name}` },
-    { kind: "fixed", amount: Number(client.entryAmount), category: "Projeto", description: `Entrada fixa — ${client.company || client.name}` },
-  ];
-  const managedKinds = new Set(revenueKinds.map(({ kind }) => kind));
-  const existingEntries = transactions.filter((entry) => entry.clientId === client.id && managedKinds.has(entry.revenueKind));
-  const remaining = transactions.filter((entry) => entry.clientId !== client.id || !managedKinds.has(entry.revenueKind));
+const RENEWAL_WINDOW_DAYS = 10;
+const CLIENT_CANCELLED = "CANCELADO";
+const CLIENT_EXPIRED = "EXPIRADO";
+const CLIENT_ACTIVE = "ATIVO";
 
-  return [
-    ...remaining,
-    ...revenueKinds.flatMap(({ kind, amount, category, description }) => {
-      if (amount <= 0) return [];
-      const existing = existingEntries.find((entry) => entry.revenueKind === kind);
-      return [{
-        id: existing?.id || createId("t"),
-        clientId: client.id,
-        revenueKind: kind,
-        description,
-        category,
-        type: "income",
-        amount,
-        date: client.renewal,
-        status: existing?.status || "Pendente",
-      }];
-    }),
+function isCancelledClient(client) {
+  return String(client.status || "").toLocaleUpperCase("pt-BR") === CLIENT_CANCELLED;
+}
+
+function isInactiveClient(client) {
+  return String(client.status || "").toLocaleLowerCase("pt-BR") === "inativo";
+}
+
+function daysUntilRenewal(renewal, today = new Date()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(renewal || "")) return null;
+  const [year, month, day] = renewal.split("-").map(Number);
+  const renewalDate = new Date(year, month - 1, day);
+  if (renewalDate.getFullYear() !== year || renewalDate.getMonth() !== month - 1 || renewalDate.getDate() !== day) return null;
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((renewalDate.getTime() - todayDate.getTime()) / 86_400_000);
+}
+
+export function getClientRenewalStatus(client, today = new Date()) {
+  if (isCancelledClient(client)) return CLIENT_CANCELLED;
+  if (isInactiveClient(client)) return "Inativo";
+  if (String(client.status || "").toLocaleUpperCase("pt-BR") === CLIENT_EXPIRED) return CLIENT_EXPIRED;
+  const days = daysUntilRenewal(client.renewal, today);
+  if (days === null) return CLIENT_ACTIVE;
+  if (days < 0) return CLIENT_EXPIRED;
+  if (days <= RENEWAL_WINDOW_DAYS) return `PRAZO ${days} DIAS`;
+  return CLIENT_ACTIVE;
+}
+
+export function syncClientRevenue(transactions, client, today = new Date()) {
+  const renewalStatus = getClientRenewalStatus(client, today);
+  const revenueKinds = [
+    { kind: "monthly", amount: Number(client.monthly), category: "Mensalidade", description: `Mensalidade — ${client.company || client.name}`, status: renewalStatus },
+    { kind: "fixed", amount: Number(client.entryAmount), category: "Projeto", description: `Entrada fixa — ${client.company || client.name}`, status: "Recebido" },
   ];
+  const foundKinds = new Set();
+  let changed = false;
+  const synced = transactions.flatMap((entry) => {
+    const kind = entry.clientId === client.id && revenueKinds.some((item) => item.kind === entry.revenueKind)
+      ? entry.revenueKind
+      : !entry.revenueKind && isClientMonthlyRevenue(entry, client)
+        ? "monthly"
+        : null;
+    if (!kind) return [entry];
+    foundKinds.add(kind);
+    const revenue = revenueKinds.find((item) => item.kind === kind);
+    if (revenue.amount <= 0) {
+      changed = true;
+      return [];
+    }
+    const updated = {
+      ...entry,
+      id: entry.id || createId("t"),
+      clientId: client.id,
+      revenueKind: kind,
+      description: revenue.description,
+      category: revenue.category,
+      type: "income",
+      amount: revenue.amount,
+      date: kind === "fixed" ? entry.date || localDateString(today) : client.renewal,
+      status: kind === "fixed" ? entry.status || "Recebido" : revenue.status,
+    };
+    if (Object.keys(updated).length !== Object.keys(entry).length
+      || Object.entries(updated).some(([key, value]) => entry[key] !== value)) changed = true;
+    return [changed ? updated : entry];
+  });
+  for (const revenue of revenueKinds) {
+    if (revenue.amount <= 0 || foundKinds.has(revenue.kind)) continue;
+    const exclusionKey = revenue.kind === "monthly" ? `monthly:${client.renewal}` : "fixed";
+    if (client.revenueExclusions?.includes(exclusionKey)) continue;
+    synced.push({
+      id: createId("t"),
+      clientId: client.id,
+      revenueKind: revenue.kind,
+      description: revenue.description,
+      category: revenue.category,
+      type: "income",
+      amount: revenue.amount,
+      date: revenue.kind === "fixed" ? localDateString(today) : client.renewal,
+      status: revenue.status,
+    });
+    changed = true;
+  }
+  return changed ? synced : transactions;
+}
+
+export function deleteTransaction(data, transactionId) {
+  const transaction = data.transactions.find((entry) => entry.id === transactionId);
+  if (!transaction) return data;
+
+  const transactions = data.transactions.filter((entry) => entry.id !== transactionId);
+  const client = data.clients.find((item) => item.id === transaction.clientId
+    || (!transaction.clientId && isClientMonthlyRevenue(transaction, item)));
+  if (!client || (!transaction.revenueKind && !isClientMonthlyRevenue(transaction, client))) {
+    return { ...data, transactions };
+  }
+
+  const kind = transaction.revenueKind || "monthly";
+  if (!["monthly", "fixed"].includes(kind)) return { ...data, transactions };
+  const exclusionKey = kind === "monthly"
+    ? `monthly:${transaction.date || client.renewal}`
+    : "fixed";
+  const revenueExclusions = [...new Set([...(client.revenueExclusions || []), exclusionKey])];
+  const clients = data.clients.map((item) => item.id === client.id ? { ...item, revenueExclusions } : item);
+  return { ...data, clients, transactions };
+}
+
+export function removeClientRevenue(transactions, client) {
+  return transactions.flatMap((entry) => {
+    if (entry.clientId !== client.id) return [entry];
+    if (entry.revenueKind === "monthly") return [];
+    if (entry.revenueKind === "fixed") {
+      const { clientId, revenueKind, ...standaloneEntry } = entry;
+      return [standaloneEntry];
+    }
+    return [entry];
+  }).filter((entry) => entry.clientId || !isClientMonthlyRevenue(entry, client));
 }
 
 function localDateString(date = new Date()) {
@@ -206,10 +300,10 @@ function addMonth(dateString) {
 }
 
 export function isRenewalDue(client, today = new Date()) {
-  if (!client.renewal || !/^\d{4}-\d{2}-\d{2}$/.test(client.renewal)) return false;
-  const cutoff = new Date(`${localDateString(today)}T12:00:00`);
-  cutoff.setDate(cutoff.getDate() + 2);
-  return client.renewal <= localDateString(cutoff);
+  if (isCancelledClient(client) || isInactiveClient(client)) return false;
+  if (String(client.status || "").toLocaleUpperCase("pt-BR") === CLIENT_EXPIRED) return true;
+  const days = daysUntilRenewal(client.renewal, today);
+  return days !== null && days <= RENEWAL_WINDOW_DAYS;
 }
 
 function isClientMonthlyRevenue(entry, client) {
@@ -219,69 +313,62 @@ function isClientMonthlyRevenue(entry, client) {
   return entry.description === `Plano mensal — ${company}` || entry.description === `Mensalidade — ${company}`;
 }
 
-export function markDueRenewalsPending(data, today = new Date()) {
-  const dueClients = data.clients.filter((client) =>
-    client.status === "Ativo" && Number(client.monthly) > 0 && isRenewalDue(client, today),
-  );
-  if (!dueClients.length) return data;
-
-  const dueClientIds = new Set(dueClients.map((client) => client.id));
-  const clients = data.clients.map((client) => dueClientIds.has(client.id) ? { ...client, status: "Pendente" } : client);
-  const matchedClientIds = new Set();
-  const transactions = data.transactions.map((entry) => {
-    const client = dueClients.find((item) => isClientMonthlyRevenue(entry, item));
-    if (!client) return entry;
-    matchedClientIds.add(client.id);
-    if (entry.status === "Pendente" && entry.date === client.renewal && entry.clientId === client.id) return entry;
-    return { ...entry, clientId: client.id, revenueKind: "monthly", date: client.renewal, status: "Pendente" };
+export function syncClientRenewalStatuses(data, today = new Date()) {
+  const clients = data.clients.map((client) => {
+    const status = getClientRenewalStatus(client, today);
+    return client.status === status ? client : { ...client, status };
   });
-  for (const client of dueClients) {
-    if (matchedClientIds.has(client.id)) continue;
-    transactions.push({
-      id: createId("t"),
-      clientId: client.id,
-      revenueKind: "monthly",
-      description: `Mensalidade — ${client.company || client.name}`,
-      category: "Mensalidade",
-      type: "income",
-      amount: Number(client.monthly),
-      date: client.renewal,
-      status: "Pendente",
-    });
+  let transactions = data.transactions;
+  for (const client of clients) {
+    transactions = syncClientRevenue(transactions, client, today);
   }
-
+  if (clients.every((client, index) => client === data.clients[index]) && transactions === data.transactions) return data;
   return { ...data, clients, transactions };
 }
 
-export function confirmClientRenewal(data, clientId) {
+export function markDueRenewalsPending(data, today = new Date()) {
+  return syncClientRenewalStatuses(data, today);
+}
+
+export function confirmClientRenewal(data, clientId, today = new Date()) {
   const client = data.clients.find((item) => item.id === clientId);
-  if (!client || client.status !== "Pendente" || Number(client.monthly) <= 0) return data;
+  if (!client || !isRenewalDue(client, today) || Number(client.monthly) <= 0) return data;
 
-  const nextRenewal = addMonth(client.renewal || localDateString());
-  const updatedClient = { ...client, status: "Ativo", renewal: nextRenewal };
+  let nextRenewal = client.renewal || localDateString(today);
+  do {
+    nextRenewal = addMonth(nextRenewal);
+  } while (nextRenewal <= localDateString(today));
+  const updatedClient = {
+    ...client,
+    status: CLIENT_ACTIVE,
+    renewal: nextRenewal,
+    revenueExclusions: (client.revenueExclusions || []).filter((exclusion) => !exclusion.startsWith("monthly:")),
+  };
   const clients = data.clients.map((item) => item.id === clientId ? updatedClient : item);
-  let matchedRevenue = false;
-  const transactions = data.transactions.map((entry) => {
-    if (!isClientMonthlyRevenue(entry, client)) return entry;
-    matchedRevenue = true;
-    return { ...entry, clientId, revenueKind: "monthly", date: nextRenewal, status: "Recebido" };
-  });
-
-  if (!matchedRevenue) {
-    transactions.push({
-      id: createId("t"),
-      clientId,
-      revenueKind: "monthly",
-      description: `Mensalidade — ${client.company || client.name}`,
-      category: "Mensalidade",
-      type: "income",
-      amount: Number(client.monthly),
-      date: nextRenewal,
-      status: "Recebido",
-    });
-  }
-
+  const transactions = syncClientRevenue(data.transactions, updatedClient, today);
   return { ...data, clients, transactions };
+}
+
+export function getRevenueTotal(transactions) {
+  return transactions
+    .filter((entry) => entry.type === "income" && (entry.status === "Recebido" || entry.status === "Pago" || (entry.revenueKind === "monthly" && entry.status === CLIENT_ACTIVE)))
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+}
+
+export function getMonthlyIncome(transactions, month = getMonthKey()) {
+  return transactions
+    .filter((entry) => (
+      entry.type === "income"
+      && ((entry.revenueKind === "monthly" && entry.status === CLIENT_ACTIVE)
+        || ((entry.status === "Recebido" || entry.status === "Pago") && entry.date?.startsWith(month)))
+    ))
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+}
+
+export function getReceivableTotal(transactions) {
+  return transactions
+    .filter((entry) => entry.type === "income" && (entry.status === "Pendente" || entry.status === CLIENT_EXPIRED || /^PRAZO \d+ DIAS$/.test(entry.status || "")))
+    .reduce((total, entry) => total + Number(entry.amount), 0);
 }
 
 export function formatCurrency(value) {
@@ -313,6 +400,7 @@ export function getUpcomingRenewals(clients, days = 10, today = new Date()) {
 
   return clients
     .filter((client) => {
+      if (isCancelledClient(client) || isInactiveClient(client)) return false;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(client.renewal || "")) return false;
       const [year, month, day] = client.renewal.split("-").map(Number);
       const renewal = new Date(year, month - 1, day);

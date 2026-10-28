@@ -36,9 +36,10 @@ Cada empresa tem seus próprios dados. As contas ativas vinculadas ao mesmo `com
 
 - **Visão geral:** indicadores da operação, atividade recente, clientes recentes e renovações dos próximos 10 dias.
 - **Clientes:** cadastro e edição de clientes, contato por WhatsApp, imagem por URL, serviço associado, valores, vencimento e status.
-- **Renovações:** clientes com mensalidade passam para pendente dois dias antes do vencimento; a confirmação registra o recebimento e atualiza a próxima renovação.
+- **Renovações sincronizadas:** a mensalidade começa como `ATIVO`, entra em um contador de 10 dias, passa para `EXPIRADO` após o vencimento e só volta a `ATIVO` quando a renovação é confirmada. O status também aparece no Financeiro.
 - **Serviços:** catálogo compartilhado da empresa para sites, bots e outros serviços, com mensalidade, valor fixo/de entrada e status.
-- **Financeiro:** receitas, despesas e lançamentos pendentes, com integração das mensalidades dos clientes.
+- **Financeiro:** receitas, despesas e valores a receber sincronizados com os clientes. Entradas fixas são registradas como recebidas no cadastro; clientes cancelados deixam de gerar receita recorrente.
+- **Exclusão manual:** lançamentos podem ser excluídos diretamente no Financeiro. Se a cobrança estiver vinculada a um cliente, a exclusão é respeitada na sincronização; a próxima renovação pode criar uma nova mensalidade.
 - **Equipe:** contas vinculadas à empresa com privilégios de administrador ou membro.
 - **Tema claro e escuro:** alternância na barra superior, com preferência salva no navegador.
 - **Perfil:** nome, privilégio e imagem configurável por URL.

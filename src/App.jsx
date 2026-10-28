@@ -6,17 +6,23 @@ import {
   confirmClientRenewal,
   createService,
   createTeamMemberAccount,
+  deleteTransaction,
   deleteService,
   deleteTeamMemberAccount,
   formatCurrency,
   formatShortDate,
   getDateInDays,
+  getClientRenewalStatus,
   getMonthKey,
+  getMonthlyIncome,
+  getReceivableTotal,
+  getRevenueTotal,
   getUpcomingRenewals,
   isRenewalDue,
   loadData,
-  markDueRenewalsPending,
+  removeClientRevenue,
   syncClientRevenue,
+  syncClientRenewalStatuses,
   subscribeData,
   updateData,
   updateProfilePhoto,
@@ -40,9 +46,10 @@ function getSavedTheme() {
 }
 
 function Status({ value }) {
-  const tone = value === "Ativo" || value === "Recebido" || value === "Pago" ? "" :
-    value === "Pendente" || value === "Em implantação" ? "pending" :
-      value === "Atrasado" ? "overdue" : "inactive";
+  const normalized = String(value || "").toLocaleUpperCase("pt-BR");
+  const tone = normalized === "ATIVO" || normalized === "RECEBIDO" || normalized === "PAGO" ? "" :
+    normalized.startsWith("PRAZO ") || normalized === "PENDENTE" || normalized === "EM IMPLANTAÇÃO" ? "pending" :
+      normalized === "EXPIRADO" || normalized === "ATRASADO" ? "overdue" : "inactive";
   return <span className={`status ${tone}`}>{value}</span>;
 }
 
@@ -104,7 +111,7 @@ function ClientRows({ clients, onEdit, onDelete, onConfirmRenewal }) {
       <td>{formatShortDate(client.renewal)}</td>
       <td><Status value={client.status} /></td>
       <td><div className="row-actions">
-        {client.status === "Pendente" && Number(client.monthly) > 0 && isRenewalDue(client) && (
+        {Number(client.monthly) > 0 && isRenewalDue(client) && (
           <button className="row-action renewal-confirm" type="button" onClick={() => onConfirmRenewal(client)} aria-label={`Confirmar renovação de ${client.name}`} title="Confirmar renovação">✓</button>
         )}
         <button className="row-action" type="button" onClick={() => onEdit(client)} aria-label={`Editar ${client.name}`} title="Editar cliente">✎</button>
@@ -122,13 +129,13 @@ function DataTable({ children, columns }) {
   );
 }
 
-function Field({ label, name, type = "text", choices, full = false, placeholder, defaultValue, onChange, min, minLength, step, required = true }) {
+function Field({ label, name, type = "text", choices, full = false, placeholder, defaultValue, onChange, min, minLength, step, required = true, disabled = false }) {
   return (
     <div className={`form-field${full ? " full" : ""}`}>
       <label htmlFor={`field-${name}`}>{label}</label>
       {choices
-        ? <select id={`field-${name}`} name={name} required={required} defaultValue={defaultValue ?? (typeof choices[0] === "string" ? choices[0] : choices[0]?.value)} onChange={onChange}>{choices.map((choice) => typeof choice === "string" ? <option key={choice} value={choice}>{choice}</option> : <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</select>
-        : <input id={`field-${name}`} name={name} type={type} required={required} min={min} minLength={minLength} step={step} defaultValue={defaultValue} placeholder={placeholder} />}
+        ? <select id={`field-${name}`} name={name} required={required} disabled={disabled} defaultValue={defaultValue ?? (typeof choices[0] === "string" ? choices[0] : choices[0]?.value)} onChange={onChange}>{choices.map((choice) => typeof choice === "string" ? <option key={choice} value={choice}>{choice}</option> : <option key={choice.value} value={choice.value} disabled={choice.disabled}>{choice.label}</option>)}</select>
+        : <input id={`field-${name}`} name={name} type={type} required={required} disabled={disabled} min={min} minLength={minLength} step={step} defaultValue={defaultValue} placeholder={placeholder} />}
     </div>
   );
 }
@@ -144,6 +151,9 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
     ...services.map((service) => ({ value: service.id, label: service.name })),
     ...(client?.plan && !matchedClientService ? [{ value: "__existing__", label: client.plan }] : []),
   ];
+  const clientStatusChoices = client
+    ? [client.status || "ATIVO", ...(String(client.status || "").toLocaleUpperCase("pt-BR") === "CANCELADO" ? [] : ["CANCELADO"])]
+    : ["ATIVO"];
 
   function applyServicePrices(event) {
     const service = services.find((item) => item.id === event.currentTarget.value);
@@ -180,8 +190,8 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
         <Field label="Serviço / contrato" name="serviceId" choices={clientServiceChoices} full defaultValue={matchedClientService?.id || (client?.plan ? "__existing__" : "")} onChange={applyServicePrices} />
         <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={client?.monthly} />
         <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={client?.entryAmount ?? 0} required={false} />
-        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={client?.renewal ?? getDateInDays(0)} />
-        <Field label="Status" name="status" choices={["Ativo", "Pendente", "Inativo"]} defaultValue={client?.status} />
+        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={client?.renewal ?? getDateInDays(30)} disabled={client?.status === "EXPIRADO"} />
+        <Field label="Status" name="status" choices={clientStatusChoices} defaultValue={client?.status ?? "ATIVO"} />
       </>,
     },
     transaction: {
@@ -313,19 +323,18 @@ function ProfileAvatar({ profile, className = "" }) {
 }
 
 function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
-  const monthIncome = data.transactions
-    .filter((entry) => entry.type === "income" && entry.date?.startsWith(getMonthKey()) && entry.status !== "Pendente")
-    .reduce((total, entry) => total + Number(entry.amount), 0);
-  const pending = data.transactions.filter((entry) => entry.status === "Pendente").reduce((total, entry) => total + Number(entry.amount), 0);
+  const monthIncome = getMonthlyIncome(data.transactions, getMonthKey());
+  const pending = getReceivableTotal(data.transactions);
   const activeServices = data.services.filter((service) => service.status === "Ativo").length;
   const dueSoon = getUpcomingRenewals(data.clients);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toLocaleUpperCase("pt-BR");
   const greeting = today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite";
   const monthValues = Array.from({ length: 6 }, (_, index) => getMonthKey(index - 5)).map((month) => data.transactions
-    .filter((entry) => entry.type === "income" && entry.status !== "Pendente" && entry.date?.startsWith(month))
+    .filter((entry) => entry.type === "income" && ["Recebido", "Pago"].includes(entry.status) && entry.date?.startsWith(month))
     .reduce((total, entry) => total + Number(entry.amount), 0));
   const maxMonthValue = Math.max(...monthValues, 1);
+  const confirmedMonthIncome = monthValues[monthValues.length - 1];
   const monthLabels = Array.from({ length: 6 }, (_, index) => getMonthKey(index - 5));
 
   return (
@@ -335,15 +344,15 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
         <button className="button" type="button" onClick={onNewClient}><span className="button-symbol">+</span> Novo cliente</button>
       </section>
       <section className="metric-grid">
-        <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "Ativo").length} icon="◎" note={`${data.clients.length} cadastrados`} />
-        <Metric title="Receita do mês" value={formatCurrency(monthIncome)} icon="R$" note="Receitas confirmadas" tone="green" />
+        <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "ATIVO").length} icon="◎" note={`${data.clients.length} cadastrados`} />
+        <Metric title="Receita do mês" value={formatCurrency(monthIncome)} icon="R$" note="Mensalidades ativas e receitas recebidas" tone="green" />
         <Metric title="Serviços ativos" value={activeServices} icon="⌘" note={`${data.services.length} serviços cadastrados`} tone="orange" />
         <Metric title="A receber" value={formatCurrency(pending)} icon="↗" note="Lançamentos pendentes" tone="pink" />
       </section>
       <section className="overview-grid">
         <article className="panel">
           <div className="panel-heading"><div><h2>Receita ao longo do tempo</h2><p>Entradas confirmadas nos últimos 6 meses</p></div><span className="role-pill">Mensal</span></div>
-          <div className="chart-summary"><strong>{formatCurrency(monthIncome)}</strong><span className="positive">este mês</span></div>
+          <div className="chart-summary"><strong>{formatCurrency(confirmedMonthIncome)}</strong><span className="positive">recebido este mês</span></div>
           <div className="chart">{monthValues.map((value, index) => {
             const date = new Date(`${monthLabels[index]}-01T12:00:00`);
             const label = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
@@ -375,15 +384,17 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
 
 function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }) {
   const clients = data.clients.filter((client) => [client.name, client.company, client.email, client.discord, client.plan, client.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
-  const activeMonthly = data.clients.filter((client) => client.status === "Ativo").reduce((total, client) => total + Number(client.monthly), 0);
+  const activeMonthly = data.clients
+    .filter((client) => client.status === "ATIVO" || String(client.status).startsWith("PRAZO "))
+    .reduce((total, client) => total + Number(client.monthly), 0);
   return (
     <>
       <PageHeading title="Clientes" description="Gerencie seus clientes, contratos e renovações." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo cliente</button>} />
       <section className="metric-grid">
         <Metric title="Total de clientes" value={data.clients.length} icon="◎" note="Contas cadastradas" />
-        <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "Ativo").length} icon="✓" note="Com serviços em andamento" tone="green" />
+        <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "ATIVO").length} icon="✓" note="Com serviços em andamento" tone="green" />
         <Metric title="Receita recorrente" value={formatCurrency(activeMonthly)} icon="R$" note="Mensalidades ativas" tone="orange" />
-        <Metric title="Aguardando início" value={data.clients.filter((client) => client.status === "Pendente").length} icon="…" note="Cadastros pendentes" tone="pink" />
+        <Metric title="Expirados" value={data.clients.filter((client) => client.status === "EXPIRADO").length} icon="…" note="Renovação não confirmada" tone="pink" />
       </section>
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2>Todos os clientes</h2><p>{clients.length} de {data.clients.length} registros</p></div></div>
@@ -395,9 +406,9 @@ function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }
 
 function FinancePage({ data, search, onNew, onDelete }) {
   const transactions = data.transactions.filter((entry) => [entry.description, entry.category, entry.type, entry.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search))).sort((a, b) => b.date.localeCompare(a.date));
-  const income = data.transactions.filter((item) => item.type === "income").reduce((total, item) => total + Number(item.amount), 0);
+  const income = getRevenueTotal(data.transactions);
   const expense = data.transactions.filter((item) => item.type === "expense").reduce((total, item) => total + Number(item.amount), 0);
-  const pending = data.transactions.filter((item) => item.status === "Pendente").reduce((total, item) => total + Number(item.amount), 0);
+  const pending = getReceivableTotal(data.transactions);
   return (
     <>
       <PageHeading title="Financeiro" description="Acompanhe receitas, despesas e valores a receber." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo lançamento</button>} />
@@ -413,7 +424,7 @@ function FinancePage({ data, search, onNew, onDelete }) {
             <td><strong className="table-strong">{entry.description}</strong></td><td>{entry.category}</td><td>{formatShortDate(entry.date)}</td>
             <td><span className={entry.type === "income" ? "positive" : ""}>{entry.type === "income" ? "Receita" : "Despesa"}</span></td>
             <td className={entry.type === "income" ? "amount-income" : "amount-expense"}>{entry.type === "income" ? "+" : "−"} {formatCurrency(entry.amount)}</td>
-            <td><Status value={entry.status} /></td><td><button className="row-action" type="button" onClick={() => onDelete(entry)} aria-label={`Excluir lançamento ${entry.description}`}>×</button></td>
+            <td><Status value={entry.status} /></td><td><button className="row-action" type="button" onClick={() => onDelete(entry)} aria-label={`Excluir lançamento ${entry.description}`} title="Excluir lançamento">×</button></td>
           </tr>)}
           {!transactions.length && <tr><td colSpan="7" className="empty-state">{data.transactions.length ? "Nenhum lançamento encontrado." : "Adicione seu primeiro lançamento."}</td></tr>}
         </DataTable>
@@ -513,7 +524,7 @@ export default function App() {
       dataRef.current = null;
       try {
         await loadData(authenticatedUser.uid);
-        const { data: currentData } = await updateData(authenticatedUser.uid, markDueRenewalsPending);
+        const { data: currentData } = await updateData(authenticatedUser.uid, syncClientRenewalStatuses);
         if (active) {
           dataRef.current = currentData;
           setData(currentData);
@@ -539,7 +550,7 @@ export default function App() {
     if (!user || !data) return undefined;
 
     function checkDueRenewals() {
-      commit((current) => markDueRenewalsPending(current));
+      commit((current) => syncClientRenewalStatuses(current));
     }
 
     const interval = window.setInterval(checkDueRenewals, 60_000);
@@ -685,6 +696,7 @@ export default function App() {
           plan: selectedService?.name || clientToUpdate?.plan || "",
           id: clientToUpdate?.id || createId("c"),
           name: normalizedName,
+          status: getClientRenewalStatus({ ...values, status: values.status }),
           photoUrl: validateProfilePhotoUrl(values.photoUrl || ""),
           email: values.email.trim(),
           whatsapp: values.whatsapp.trim(),
@@ -733,16 +745,21 @@ export default function App() {
     }
     commit((current) => {
       let next = { ...current, [collection]: current[collection].filter((entry) => entry.id !== item.id) };
-      if (collection === "clients") next = addActivity(next, `Cliente ${item.name} removido`, "orange");
+      if (collection === "clients") {
+        next.transactions = removeClientRevenue(current.transactions, item);
+        next = addActivity(next, `Cliente ${item.name} removido`, "orange");
+      } else if (collection === "transactions") {
+        next = addActivity(deleteTransaction(current, item.id), `Lançamento ${item.description} removido`, "orange");
+      }
       return next;
-    }, "Registro removido.");
+    }, collection === "transactions" ? "Lançamento removido." : "Registro removido.");
   }
 
   function handleConfirmRenewal(client) {
     commit((current) => {
       const next = confirmClientRenewal(current, client.id);
       return next === current ? current : addActivity(next, `Renovação de ${client.name} confirmada`);
-    }, "Renovação confirmada. Cliente reativado e mensalidade marcada como recebida.");
+    }, "Renovação confirmada. Cliente reativado e lançamento financeiro atualizado.");
   }
 
   async function deleteMember(member) {
@@ -865,7 +882,7 @@ export default function App() {
         <main className="page-content" id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
           {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
-          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?`)} />}
+          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} />}
           {currentPage === "services" && <ServicesPage {...common} onNew={() => setDialogType("service")} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}
         </main>
