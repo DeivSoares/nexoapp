@@ -50,7 +50,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .sidebar { position: fixed; z-index: 5; inset: 0 auto 0 0; display: flex; width: 252px; flex-direction: column; padding: 27px 17px 16px; border-right: 1px solid var(--line); background: var(--surface); transition: transform .2s ease; }
 .brand { display: inline-flex; width: fit-content; align-items: center; gap: 11px; padding: 0 8px; color: inherit; text-decoration: none; }
 .brand-button { border: 0; background: transparent; font: inherit; text-align: left; }
-.brand-mark { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; background: linear-gradient(145deg,#607bff,#3d55d8); box-shadow: 0 5px 12px #5368df35; color: white; font-family: "Segoe UI",Arial,sans-serif; font-size: 21px; font-weight: 800; }
+.brand-mark { display: block; width: 40px; height: 40px; flex: 0 0 auto; filter: drop-shadow(0 5px 8px #5368df35); }
 .brand-copy { display: grid; line-height: 1.06; }
 .brand-copy strong { font-family: "Segoe UI",Arial,sans-serif; font-size: 20px; letter-spacing: -.8px; }
 .brand-copy small { margin-top: 4px; color: #99a1b3; font-size: 9px; font-weight: 700; letter-spacing: 2px; }
@@ -224,6 +224,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .toast { position: fixed; z-index: 10; right: 24px; bottom: 24px; max-width: min(360px,calc(100vw - 32px)); padding: 12px 16px; transform: translateY(15px); border-radius: 9px; background: #202a40; box-shadow: 0 8px 25px #16203c2e; color: white; font-size: 12px; opacity: 0; pointer-events: none; transition: .2s; }
 .toast.is-visible { transform: translateY(0); opacity: 1; }
 .table-strong { color: #303b51; font-weight: 600; }
+.client-service-cell { display: grid; gap: 3px; }
+.client-service-cell small { color: var(--muted); font-size: 9px; }
 .amount-income { color: var(--green); font-weight: 600; }
 .amount-expense { color: var(--red); font-weight: 600; }
 .security-note { margin: 12px 2px; color: #929bad; font-size: 10px; }

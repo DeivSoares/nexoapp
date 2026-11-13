@@ -3,7 +3,7 @@ import { getApps, initializeApp } from "firebase/app";
 import { firebaseApp } from "./firebase.js";
 import { usernameToFirebaseEmail } from "./auth.js";
 
-const PROVISIONING_APP_NAME = "nexo-user-provisioning";
+const PROVISIONING_APP_NAME = "ascend-user-provisioning";
 let provisioningAuth;
 
 function getProvisioningAuth() {

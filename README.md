@@ -1,11 +1,11 @@
 <div align="center">
-  <img src="./src/assets/NexoLogo.png" alt="Nexo Gestão" width="190">
+  <img src="./src/assets/ascend-mark.svg" alt="" width="72">
 
-  <h1>Nexo Gestão</h1>
+  <h1>Ascend Gestão</h1>
   <p>Clientes, serviços, financeiro e equipe em um só lugar.</p>
 
   <p>
-    <a href="https://deivsoares.github.io/nexoapp/">Abrir o Nexo</a>
+    <a href="https://deivsoares.github.io/nexoapp/">Abrir o Ascend</a>
     ·
     <a href="./FIREBASE.md">Configurar o Firebase</a>
   </p>
@@ -22,13 +22,9 @@
 
 <br>
 
-<p align="center">
-  <img src="./docs/images/login-page.png" alt="Tela de acesso do Nexo Gestão" width="850">
-</p>
-
 ## Sobre o projeto
 
-O **Nexo Gestão** é um painel web para organizar a operação de pequenas empresas e equipes. A aplicação é feita com React e Vite, usa Firebase Authentication para login e Cloud Firestore para armazenar e sincronizar os dados.
+O **Ascend Gestão** é um painel web para organizar a operação de pequenas empresas e equipes, desenvolvido pela DvS Web. A aplicação é feita com React e Vite, usa Firebase Authentication para login e Cloud Firestore para armazenar e sincronizar os dados.
 
 Cada empresa tem seus próprios dados. As contas ativas vinculadas ao mesmo `companyId` compartilham clientes, serviços, financeiro e equipe; empresas diferentes permanecem isoladas.
 
@@ -148,7 +144,7 @@ O site publicado fica em <https://deivsoares.github.io/nexoapp/>.
 ├── .github/workflows/deploy.yml  # Build e publicação no GitHub Pages
 ├── docs/images/                  # Capturas de tela usadas na documentação
 ├── src/
-│   ├── assets/                   # Logo e ícone do Nexo
+│   ├── assets/                   # Identidade visual do Ascend
 │   ├── App.jsx                   # Painel e telas de gestão
 │   ├── Login.jsx                 # Tela de acesso
 │   ├── cloudData.js              # Persistência e sincronização no Firestore

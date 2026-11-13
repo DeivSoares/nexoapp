@@ -4,7 +4,7 @@
 .login-brand-panel::before,.login-brand-panel::after { position: absolute; right: -180px; bottom: 9%; width: 500px; height: 500px; border: 1px solid #ffffff20; border-radius: 50%; content: ""; }
 .login-brand-panel::after { right: -130px; bottom: 14%; width: 400px; height: 400px; }
 .login-brand { position: relative; z-index: 1; color: white; }
-.login-brand .brand-mark { border: 1px solid #ffffff45; background: #ffffff1c; box-shadow: none; }
+.login-brand .brand-mark { filter: drop-shadow(0 8px 18px #293e9c40); }
 .login-brand .brand-copy small { color: #d5dcff; }
 .login-brand-message { position: relative; z-index: 1; max-width: 430px; margin: -35px 0 0; }
 .login-kicker { color: #d6dcff; font-size: 10px; font-weight: 700; letter-spacing: 1.7px; }
@@ -52,7 +52,6 @@
 .login-page { background: radial-gradient(ellipse at 86% 16%,#edc0df8a,transparent 31%),radial-gradient(ellipse at 68% 85%,#a9dff28c,transparent 38%),#edf1ff; }
 .login-brand-panel { background: linear-gradient(145deg,#4559c5eF,#6479e9ed 62%,#9b80e2e8); box-shadow: inset -1px 0 #ffffff66,inset 0 1px #ffffff5c; backdrop-filter: blur(26px) saturate(145%); -webkit-backdrop-filter: blur(26px) saturate(145%); }
 .login-brand-panel::before,.login-brand-panel::after { border-color: #ffffff33; box-shadow: 0 0 0 28px #ffffff0d,0 0 0 56px #ffffff08; }
-.login-brand .brand-mark { border-color: #ffffff70; background: #ffffff27; box-shadow: 0 8px 22px #293e9c30,inset 0 1px #ffffffad; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .login-form-panel { background: #ffffff70; backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%); }
 .login-field input { border-color: #ffffffd1; background: #ffffff9e; box-shadow: 0 5px 16px #4553820b,inset 0 1px #ffffff; transition: border-color .2s,box-shadow .2s,background .2s; }
 .login-field input:focus { border-color: #8996f2; background: #ffffffd9; box-shadow: 0 0 0 4px #7786f523,0 8px 20px #45538212,inset 0 1px #fff; outline: 0; }

@@ -1,7 +1,7 @@
 {
-  "name": "nexoapp",
+  "name": "ascend-gestao",
   "version": "1.0.0",
-  "description": "Painel de gestão Nexo com autenticação Firebase",
+  "description": "Painel Ascend de gestão com autenticação Firebase",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

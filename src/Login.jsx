@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { firebaseAuth, firebaseConfigured } from "./firebase.js";
 import { usernameToFirebaseEmail } from "./auth.js";
+import ascendMark from "./assets/ascend-mark.svg";
 
 const appRoot = import.meta.env.BASE_URL;
 
@@ -58,17 +59,17 @@ export default function Login() {
 
   return (
     <main className="login-layout">
-      <section className="login-brand-panel" aria-label="Nexo Gestão">
-        <a className="brand login-brand" href={appRoot} aria-label="Nexo, início">
-          <span className="brand-mark">N</span>
-          <span className="brand-copy"><strong>Nexo</strong><small>GESTÃO</small></span>
+      <section className="login-brand-panel" aria-label="Ascend Gestão">
+        <a className="brand login-brand" href={appRoot} aria-label="Ascend, início">
+          <img className="brand-mark" src={ascendMark} alt="" />
+          <span className="brand-copy"><strong>Ascend</strong><small>GESTÃO</small></span>
         </a>
         <div className="login-brand-message">
           <span className="login-kicker">SUA OPERAÇÃO, CONECTADA</span>
           <h1>Gestão clara.<br />Decisões melhores.</h1>
           <p>Clientes, financeiro, serviços e equipe em um só lugar.</p>
         </div>
-        <span className="login-brand-footer">Nexo Gestão · DvS Web</span>
+        <span className="login-brand-footer">Ascend Gestão · DvS Web</span>
       </section>
       <section className="login-form-panel">
         <div className="login-form-wrap">
@@ -88,12 +89,12 @@ export default function Login() {
               </span>
             </label>
             {error && <p className="login-error" role="alert">{error}</p>}
-            <button className="button button-primary login-submit" type="submit" disabled={!firebaseConfigured || loading}>{loading ? "Entrando..." : "Entrar no Nexo"}</button>
+            <button className="button button-primary login-submit" type="submit" disabled={!firebaseConfigured || loading}>{loading ? "Entrando..." : "Entrar no Ascend"}</button>
           </form>
           <p className="login-access-note"><span aria-hidden="true">♙</span> O acesso é criado e gerenciado pelo administrador.</p>
           {!firebaseConfigured && <p className="login-setup-note">O Firebase ainda não foi configurado. O administrador precisa preencher as variáveis VITE_FIREBASE_* no arquivo .env.local e reiniciar o app.</p>}
         </div>
-        <footer className="login-footer">© {new Date().getFullYear()} Nexo Gestão</footer>
+        <footer className="login-footer">© {new Date().getFullYear()} Ascend Gestão</footer>
       </section>
     </main>
   );

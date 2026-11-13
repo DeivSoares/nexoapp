@@ -13,6 +13,7 @@ import {
   removeClientRevenue,
   syncClientRevenue,
   syncClientRenewalStatuses,
+  updateServiceAndClients,
 } from "./data.js";
 
 const client = {
@@ -78,6 +79,40 @@ test("removes linked income entries when their client amounts become zero", () =
   const updated = syncClientRevenue(initial, { ...client, monthly: 0, entryAmount: 0 });
 
   assert.deepEqual(updated, []);
+});
+
+test("editing a service updates linked clients and their monthly and fixed financial entries", () => {
+  const service = { id: "service-1", name: "Site antigo", type: "Site", monthly: 250, entryAmount: 500, status: "Ativo" };
+  const linkedClient = { ...client, serviceId: service.id, plan: service.name, monthly: service.monthly, entryAmount: service.entryAmount };
+  const legacyClient = { ...client, id: "client-legacy", plan: service.name };
+  const otherClient = { ...client, id: "client-other", serviceId: "service-2", plan: "Outro" };
+  const data = {
+    services: [service, { id: "service-2", name: "Outro" }],
+    clients: [linkedClient, legacyClient, otherClient],
+    transactions: [
+      ...syncClientRevenue([], linkedClient, new Date(2026, 9, 24)),
+      ...syncClientRevenue([], legacyClient, new Date(2026, 9, 24)),
+      { id: "unrelated", description: "Outro lançamento" },
+    ],
+  };
+
+  const updated = updateServiceAndClients(data, service, {
+    name: "Aplicativo novo",
+    type: "Bot",
+    monthly: 300,
+    entryAmount: 750,
+    status: "Inativo",
+  }, new Date(2026, 9, 24));
+
+  assert.deepEqual(updated.services[0], { ...service, name: "Aplicativo novo", type: "Bot", monthly: 300, entryAmount: 750, status: "Inativo" });
+  assert.deepEqual(updated.clients.slice(0, 2).map(({ plan, serviceType, monthly, entryAmount }) => ({ plan, serviceType, monthly, entryAmount })), [
+    { plan: "Aplicativo novo", serviceType: "Bot", monthly: 300, entryAmount: 750 },
+    { plan: "Aplicativo novo", serviceType: "Bot", monthly: 300, entryAmount: 750 },
+  ]);
+  assert.equal(updated.clients[2], otherClient);
+  assert.equal(updated.transactions.filter((entry) => entry.revenueKind === "monthly").every((entry) => entry.amount === 300 && entry.description === "Mensalidade — Empresa Teste"), true);
+  assert.equal(updated.transactions.filter((entry) => entry.revenueKind === "fixed").every((entry) => entry.amount === 750 && entry.description === "Entrada fixa — Empresa Teste"), true);
+  assert.ok(updated.transactions.some((entry) => entry.id === "unrelated"));
 });
 
 test("deleting a client removes its recurring revenue but keeps received fixed income", () => {

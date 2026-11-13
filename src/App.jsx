@@ -30,9 +30,11 @@ import {
   updateService,
 } from "./data.js";
 import { getUserProfile, validateProfilePhotoUrl } from "./profile.js";
+import ascendMark from "./assets/ascend-mark.svg";
 
 const loginPath = `${import.meta.env.BASE_URL}login.html`;
-const themeStorageKey = "nexo-theme";
+const themeStorageKey = "ascend-theme";
+const legacyThemeStorageKey = "nexo-theme";
 
 const pages = {
   overview: "Visão geral",
@@ -43,7 +45,9 @@ const pages = {
 };
 
 function getSavedTheme() {
-  return window.localStorage.getItem(themeStorageKey) === "dark" ? "dark" : "light";
+  const savedTheme = window.localStorage.getItem(themeStorageKey)
+    || window.localStorage.getItem(legacyThemeStorageKey);
+  return savedTheme === "dark" ? "dark" : "light";
 }
 
 function Status({ value }) {
@@ -65,6 +69,10 @@ function PersonCell({ person, subtitle, tone = "avatar-blue" }) {
       <span><strong>{person.name}</strong><small>{subtitle}</small></span>
     </div>
   );
+}
+
+function ClientServiceCell({ client }) {
+  return <span className="client-service-cell">{client.plan || "—"}{client.serviceType && <small>{client.serviceType}</small>}</span>;
 }
 
 function Metric({ title, value, icon, note, tone = "" }) {
@@ -106,7 +114,7 @@ function ClientRows({ clients, onEdit, onDelete, onConfirmRenewal }) {
     <tr key={client.id}>
       <td><PersonCell person={client} subtitle={client.company} /></td>
       <td>{client.discord || "—"}</td>
-      <td>{client.plan}</td>
+      <td><ClientServiceCell client={client} /></td>
       <td>{formatCurrency(client.monthly)}</td>
       <td>{formatCurrency(client.entryAmount)}</td>
       <td>{formatShortDate(client.renewal)}</td>
@@ -141,7 +149,7 @@ function Field({ label, name, type = "text", choices, full = false, placeholder,
   );
 }
 
-function EntryDialog({ type, services = [], client, onClose, onSave }) {
+function EntryDialog({ type, services = [], client, service, onClose, onSave }) {
   const dialogRef = useRef(null);
   const [transactionType, setTransactionType] = useState("Receita");
   const [saving, setSaving] = useState(false);
@@ -207,13 +215,13 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
       </>,
     },
     service: {
-      title: "Novo serviço",
+      title: service ? "Editar serviço" : "Novo serviço",
       fields: <>
-        <Field label="Nome do serviço" name="name" full placeholder="Ex.: Site institucional" />
-        <Field label="Tipo" name="type" choices={["Site", "Bot"]} />
-        <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" />
-        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" required={false} />
-        <Field label="Status" name="status" choices={["Ativo", "Em implantação", "Inativo"]} />
+        <Field label="Nome do serviço" name="name" full placeholder="Ex.: Site institucional" defaultValue={service?.name} />
+        <Field label="Tipo" name="type" choices={["Site", "Bot"]} defaultValue={service?.type} />
+        <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={service?.monthly} />
+        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={service?.entryAmount ?? 0} required={false} />
+        <Field label="Status" name="status" choices={["Ativo", "Em implantação", "Inativo"]} defaultValue={service?.status ?? "Ativo"} />
       </>,
     },
     member: {
@@ -235,9 +243,9 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
     setSaving(true);
     setSubmitError("");
     try {
-      await onSave(type, Object.fromEntries(new FormData(event.currentTarget).entries()), client);
+      await onSave(type, Object.fromEntries(new FormData(event.currentTarget).entries()), client, service);
     } catch (error) {
-      setSubmitError(error.message || "Não foi possível criar o usuário.");
+      setSubmitError(error.message || (type === "member" ? "Não foi possível criar o usuário." : "Não foi possível salvar os dados."));
     } finally {
       setSaving(false);
     }
@@ -256,7 +264,7 @@ function EntryDialog({ type, services = [], client, onClose, onSave }) {
         {submitError && <p className="form-error" role="alert">{submitError}</p>}
         <div className="dialog-actions">
           <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Criando..." : type === "member" ? "Criar usuário" : "Salvar"}</button>
+          <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Salvando..." : type === "member" ? "Criar usuário" : "Salvar"}</button>
         </div>
       </form>
     </dialog>
@@ -373,14 +381,14 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2>Clientes recentes</h2><p>Visão rápida dos contratos da operação</p></div><button className="text-link" type="button" onClick={() => onNavigate("clients")}>Ver todos <span aria-hidden="true">→</span></button></div>
         <DataTable columns={["CLIENTE", "SERVIÇO", "MENSALIDADE", "RENOVAÇÃO", "STATUS", ""]}>
-          {data.clients.slice(-4).reverse().map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td>{client.plan}</td><td>{formatCurrency(client.monthly)}</td><td>{formatShortDate(client.renewal)}</td><td><Status value={client.status} /></td><td><button className="row-action" type="button" onClick={() => onDeleteClient(client)} aria-label={`Excluir ${client.name}`}>×</button></td></tr>)}
+          {data.clients.slice(-4).reverse().map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatCurrency(client.monthly)}</td><td>{formatShortDate(client.renewal)}</td><td><Status value={client.status} /></td><td><button className="row-action" type="button" onClick={() => onDeleteClient(client)} aria-label={`Excluir ${client.name}`}>×</button></td></tr>)}
           {!data.clients.length && <tr><td colSpan="6" className="empty-state">Cadastre seu primeiro cliente para começar.</td></tr>}
         </DataTable>
       </section>
       <section className="panel table-panel" style={{ marginTop: 16 }}>
         <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 10 dias</p></div></div>
         <DataTable columns={["CLIENTE", "SERVIÇO", "RENOVAÇÃO", "VALOR", "STATUS"]}>
-          {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td>{client.plan}</td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
+          {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
           {!dueSoon.length && <tr><td colSpan="5" className="empty-state">Nenhuma renovação nos próximos dias.</td></tr>}
         </DataTable>
       </section>
@@ -439,7 +447,7 @@ function FinancePage({ data, search, onNew, onDelete }) {
   );
 }
 
-function ServicesPage({ data, search, onNew, onDelete, onToggle }) {
+function ServicesPage({ data, search, onNew, onEdit, onDelete, onToggle }) {
   const services = data.services.filter((service) => [service.name, service.type, service.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
   const sites = data.services.filter((service) => service.type === "Site");
   const bots = data.services.filter((service) => service.type === "Bot");
@@ -456,7 +464,10 @@ function ServicesPage({ data, search, onNew, onDelete, onToggle }) {
           {services.map((service) => <tr key={service.id}>
             <td><strong className="table-strong">{service.name}</strong></td><td>{service.type}</td><td>{formatCurrency(service.monthly)}</td><td>{formatCurrency(service.entryAmount)}</td>
             <td><button className="status-button" type="button" onClick={() => onToggle(service)} aria-label={`Alterar status de ${service.name}`}><Status value={service.status} /></button></td>
-            <td><button className="row-action" type="button" onClick={() => onDelete(service)} aria-label={`Excluir ${service.name}`}>×</button></td>
+            <td><div className="row-actions">
+              <button className="row-action" type="button" onClick={() => onEdit(service)} aria-label={`Editar ${service.name}`} title="Editar serviço">✎</button>
+              <button className="row-action" type="button" onClick={() => onDelete(service)} aria-label={`Excluir ${service.name}`}>×</button>
+            </div></td>
           </tr>)}
           {!services.length && <tr><td colSpan="6" className="empty-state">{data.services.length ? "Nenhum serviço encontrado." : "Cadastre seu primeiro serviço."}</td></tr>}
         </DataTable>
@@ -498,6 +509,7 @@ export default function App() {
   const [theme, setTheme] = useState(getSavedTheme);
   const [dialogType, setDialogType] = useState("");
   const [editingClient, setEditingClient] = useState(null);
+  const [editingService, setEditingService] = useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [storageError, setStorageError] = useState("");
@@ -654,7 +666,7 @@ export default function App() {
     };
   }
 
-  async function handleSave(type, values, clientToUpdate = null) {
+  async function handleSave(type, values, clientToUpdate = null, serviceToUpdate = null) {
     const normalizedName = values.name?.trim();
     if (type === "member") {
       const member = {
@@ -685,17 +697,22 @@ export default function App() {
       return;
     }
     if (type === "service") {
-      const service = {
-        id: createId("s"),
+      const serviceChanges = {
         name: normalizedName,
         type: values.type,
         monthly: Number(values.monthly),
         entryAmount: Number(values.entryAmount || 0),
         status: values.status,
       };
-      await createService(user.uid, service);
-      commit((current) => addActivity(current, `Serviço ${normalizedName} adicionado`), "Serviço cadastrado com sucesso.");
+      if (serviceToUpdate) {
+        await updateService(user.uid, serviceToUpdate.id, serviceChanges);
+        setToast(`Serviço ${normalizedName} atualizado. Clientes e financeiro sincronizados.`);
+      } else {
+        await createService(user.uid, { id: createId("s"), ...serviceChanges });
+        setToast("Serviço cadastrado com sucesso.");
+      }
       setDialogType("");
+      setEditingService(null);
       return;
     }
 
@@ -707,6 +724,7 @@ export default function App() {
           ...values,
           serviceId: selectedService?.id || clientToUpdate?.serviceId || "",
           plan: selectedService?.name || clientToUpdate?.plan || "",
+          serviceType: selectedService?.type || clientToUpdate?.serviceType || "",
           id: clientToUpdate?.id || createId("c"),
           name: normalizedName,
           status: getClientRenewalStatus({ ...values, status: values.status }),
@@ -780,7 +798,7 @@ export default function App() {
       setToast("Mantenha pelo menos uma pessoa administradora.");
       return;
     }
-    if (!window.confirm(`Remover ${member.name} da equipe? A pessoa perderá o acesso ao Nexo desta empresa.`)) return;
+    if (!window.confirm(`Remover ${member.name} da equipe? A pessoa perderá o acesso ao Ascend desta empresa.`)) return;
     if (!member.authUid) {
       commit((current) => {
         const team = current.team.filter((person) => person.id !== member.id);
@@ -846,7 +864,7 @@ export default function App() {
   if (storageError) {
     return <main className="page-content"><section className="panel storage-error" role="alert"><h1>Não foi possível acessar os dados do Firebase</h1><p>{storageError}</p><p>Confira se o Firestore está criado e se as regras foram publicadas no mesmo projeto Firebase configurado no app.</p></section></main>;
   }
-  if (!data) return <div className="auth-loading" role="status">Carregando Nexo...</div>;
+  if (!data) return <div className="auth-loading" role="status">Carregando Ascend...</div>;
 
   const common = {
     data,
@@ -858,8 +876,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar${menuOpen ? " is-open" : ""}`} id="sidebar">
-        <button className="brand brand-button" type="button" onClick={() => navigate("overview")} aria-label="Nexo, início">
-          <span className="brand-mark">N</span><span className="brand-copy"><strong>Nexo</strong><small>GESTÃO</small></span>
+        <button className="brand brand-button" type="button" onClick={() => navigate("overview")} aria-label="Ascend, início">
+          <img className="brand-mark" src={ascendMark} alt="" /><span className="brand-copy"><strong>Ascend</strong><small>GESTÃO</small></span>
         </button>
         <div className="workspace-label">WORKSPACE</div>
         <nav className="primary-nav" aria-label="Navegação principal">
@@ -882,7 +900,7 @@ export default function App() {
       <div className="main-column">
         <header className="topbar">
           <button className="mobile-menu" id="mobile-menu" type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Abrir menu" aria-expanded={menuOpen}>☰</button>
-          <div className="breadcrumbs"><span>Nexo</span><span aria-hidden="true">/</span><strong>{pages[currentPage]}</strong></div>
+          <div className="breadcrumbs"><span>Ascend</span><span aria-hidden="true">/</span><strong>{pages[currentPage]}</strong></div>
           <div className="topbar-actions">
             <label className="search-box"><span aria-hidden="true">⌕</span><input id="global-search" type="search" placeholder="Buscar clientes..." autoComplete="off" aria-label="Buscar clientes; pressione Enter para ver os resultados" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} onKeyDown={submitSearch} /><kbd>Enter</kbd></label>
             <button className="theme-toggle" type="button" onClick={() => setTheme((current) => current === "light" ? "dark" : "light")} aria-label={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} title={`Ativar tema ${theme === "light" ? "escuro" : "claro"}`} aria-pressed={theme === "dark"}>
@@ -896,12 +914,12 @@ export default function App() {
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
           {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
           {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} />}
-          {currentPage === "services" && <ServicesPage {...common} onNew={() => setDialogType("service")} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
+          {currentPage === "services" && <ServicesPage {...common} onNew={() => { setEditingService(null); setDialogType("service"); }} onEdit={(service) => { setEditingService(service); setDialogType("service"); }} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}
         </main>
-        <footer className="page-footer"><span>Nexo Gestão</span><span>Uma operação mais conectada.</span></footer>
+        <footer className="page-footer"><span>Ascend Gestão</span><span>Uma operação mais conectada.</span></footer>
       </div>
-      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || "new"}`} type={dialogType} services={data.services} client={dialogType === "client" ? editingClient : null} onClose={() => { setDialogType(""); setEditingClient(null); }} onSave={handleSave} />}
+      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || editingService?.id || "new"}`} type={dialogType} services={data.services} client={dialogType === "client" ? editingClient : null} service={dialogType === "service" ? editingService : null} onClose={() => { setDialogType(""); setEditingClient(null); setEditingService(null); }} onSave={handleSave} />}
       {profileDialogOpen && <ProfilePhotoDialog photoUrl={profile.photoUrl} onClose={() => setProfileDialogOpen(false)} onSave={handleProfilePhotoSave} />}
       {toast && <div className="toast is-visible" role="status" aria-live="polite">{toast}</div>}
     </div>

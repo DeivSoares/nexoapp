@@ -42,7 +42,7 @@ function loadLocalData(uid) {
   try {
     return validateData(JSON.parse(stored));
   } catch (error) {
-    console.error("Não foi possível carregar os dados salvos do Nexo.", error);
+    console.error("Não foi possível carregar os dados salvos do Ascend.", error);
     throw new Error("Os dados salvos estão inválidos. Limpe os dados do site e tente novamente.");
   }
 }
@@ -95,7 +95,7 @@ export async function createService(uid, service) {
 export async function updateService(uid, serviceId, changes) {
   const { updateCloudService } = await import("./cloudData.js");
   try {
-    await updateCloudService(uid, serviceId, changes);
+    await updateCloudService(uid, serviceId, changes, updateServiceAndClients, validateData);
   } catch (error) {
     throw getCloudDataError(error);
   }
@@ -249,6 +249,29 @@ export function syncClientRevenue(transactions, client, today = new Date()) {
     changed = true;
   }
   return changed ? synced : transactions;
+}
+
+export function updateServiceAndClients(data, service, changes, today = new Date()) {
+  const updatedService = { ...service, ...changes };
+  const clients = data.clients.map((client) => {
+    const belongsToService = client.serviceId === service.id
+      || (!client.serviceId && client.plan === service.name);
+    if (!belongsToService) return client;
+    return {
+      ...client,
+      serviceId: service.id,
+      plan: updatedService.name,
+      serviceType: updatedService.type,
+      monthly: Number(updatedService.monthly || 0),
+      entryAmount: Number(updatedService.entryAmount || 0),
+    };
+  });
+  let transactions = data.transactions;
+  for (const [index, client] of clients.entries()) {
+    if (client !== data.clients[index]) transactions = syncClientRevenue(transactions, client, today);
+  }
+  const services = data.services.map((item) => item.id === service.id ? updatedService : item);
+  return { ...data, services, clients, transactions };
 }
 
 export function deleteTransaction(data, transactionId) {

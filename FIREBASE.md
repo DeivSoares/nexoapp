@@ -1,6 +1,6 @@
 # Firebase Authentication e Firestore
 
-O Nexo autentica por usuário e senha usando diretamente o Firebase Authentication e salva os dados do app no Cloud Firestore. Cada empresa tem um `companyId`; contas vinculadas ao mesmo identificador compartilham clientes, financeiro, serviços, atividades e equipe. Os serviços de catálogo são documentos separados em `companies/{companyId}/services/{serviceId}`. Empresas com identificadores diferentes permanecem isoladas. A configuração funciona no plano Spark, sem Cloud Functions, App Check ou plano Blaze.
+O Ascend autentica por usuário e senha usando diretamente o Firebase Authentication e salva os dados do app no Cloud Firestore. Cada empresa tem um `companyId`; contas vinculadas ao mesmo identificador compartilham clientes, financeiro, serviços, atividades e equipe. Os serviços de catálogo são documentos separados em `companies/{companyId}/services/{serviceId}`. Empresas com identificadores diferentes permanecem isoladas. A configuração funciona no plano Spark, sem Cloud Functions, App Check ou plano Blaze.
 
 ## Configurar o Firebase no plano Spark
 
@@ -21,25 +21,25 @@ As variáveis `VITE_FIREBASE_*` do `.env.local` são a configuração pública d
 
 ## Configurar o administrador da empresa
 
-1. Crie a primeira conta em **Authentication → Users → Add user**. O e-mail Firebase é técnico e tem o formato `<usuario>@<projectId>.firebaseapp.com`; o administrador entra no Nexo usando somente o nome de usuário e a senha.
+1. Crie a primeira conta em **Authentication → Users → Add user**. O e-mail Firebase é técnico e tem o formato `<usuario>@<projectId>.firebaseapp.com`; o administrador entra no Ascend usando somente o nome de usuário e a senha.
 2. Copie o UID da conta em **Authentication → Users**.
 3. Em **Firestore Database → Dados**, crie/edite `companyMemberships/{UID}` com estes campos:
    - `companyId` (string): identificador da empresa, por exemplo `dvs-web`.
    - `active` (boolean): `true`.
    - `canManageUsers` (boolean): `true`.
-4. Entre no Nexo com essa conta. O app inicializa os dados da empresa ou migra os dados legados existentes.
+4. Entre no Ascend com essa conta. O app inicializa os dados da empresa ou migra os dados legados existentes.
 
 `canManageUsers: true` autoriza a conta a criar outros logins. Essa permissão inicial do primeiro administrador deve ser concedida pelo Console do Firebase uma única vez. Depois, administradores autorizados podem criar novos membros com a permissão preenchida automaticamente conforme a função escolhida.
 
 ## Criar contas para a equipe
 
-Na aba **Equipe → Adicionar pessoa**, informe nome, usuário, senha inicial (mínimo de 6 caracteres), e-mail de contato opcional e função. O Nexo cria uma conta no Firebase Authentication, salva o membro na equipe compartilhada e cria `companyMemberships/{UID}` automaticamente com o mesmo `companyId`, `active: true` e `usuario` preenchido com o nome informado. `canManageUsers` também é definido automaticamente: `true` para a função **Administrador**, `false` para as outras funções. Assim é possível localizar o vínculo pelo UID no Firestore e ver o nome do membro. Não é necessário criar ou editar o vínculo de cada novo membro pelo Console. Depois de mudar o código ou as regras, publique ambos: regras no Firebase Console e a nova versão compilada do app no GitHub Pages.
+Na aba **Equipe → Adicionar pessoa**, informe nome, usuário, senha inicial (mínimo de 6 caracteres), e-mail de contato opcional e função. O Ascend cria uma conta no Firebase Authentication, salva o membro na equipe compartilhada e cria `companyMemberships/{UID}` automaticamente com o mesmo `companyId`, `active: true` e `usuario` preenchido com o nome informado. `canManageUsers` também é definido automaticamente: `true` para a função **Administrador**, `false` para as outras funções. Assim é possível localizar o vínculo pelo UID no Firestore e ver o nome do membro. Não é necessário criar ou editar o vínculo de cada novo membro pelo Console. Depois de mudar o código ou as regras, publique ambos: regras no Firebase Console e a nova versão compilada do app no GitHub Pages.
 
 O usuário que realiza o cadastro precisa ter `canManageUsers: true` no próprio vínculo. A permissão inicial do administrador da empresa deve ser concedida pelo Console uma única vez; usuários comuns não podem concedê-la a si mesmos. Os nomes de usuário são normalizados para minúsculas e aceitam de 3 a 64 caracteres: letras sem acento, números, ponto, hífen ou sublinhado. São únicos no projeto. Se a criação da associação falhar, o app tenta remover a conta recém-criada; se não conseguir, exibirá instruções para remover o usuário órfão em **Authentication → Users**.
 
 As contas criadas por essa tela não recebem e-mail de recuperação, porque usam e-mails técnicos. O administrador deve redefinir senhas pelo Firebase Console. A função **Administrador** permite criar usuários; as funções não restringem o acesso às outras telas do app.
 
-Ao remover um membro criado pelo Nexo, o app exclui em uma transação o registro da equipe e `companyMemberships/{UID}`. A pessoa perde acesso aos dados da empresa e a sessão aberta é encerrada quando o Firestore detecta a remoção. A conta de autenticação permanece em **Authentication → Users** e pode ser excluída manualmente pelo administrador; a exclusão de outras contas do Firebase Authentication exige acesso administrativo de servidor e não é feita pelo app web. Membros antigos sem UID salvo podem ser removidos da lista, mas precisam ter o vínculo e a conta revogados manualmente no Console.
+Ao remover um membro criado pelo Ascend, o app exclui em uma transação o registro da equipe e `companyMemberships/{UID}`. A pessoa perde acesso aos dados da empresa e a sessão aberta é encerrada quando o Firestore detecta a remoção. A conta de autenticação permanece em **Authentication → Users** e pode ser excluída manualmente pelo administrador; a exclusão de outras contas do Firebase Authentication exige acesso administrativo de servidor e não é feita pelo app web. Membros antigos sem UID salvo podem ser removidos da lista, mas precisam ter o vínculo e a conta revogados manualmente no Console.
 
 ### Vincular contas que já existem
 
@@ -53,7 +53,7 @@ Na aba **Serviços**, cada serviço é cadastrado como um documento separado em 
 
 Clientes e Financeiro compartilham os mesmos dados da empresa. A mensalidade do cliente gera um lançamento sincronizado: começa como `ATIVO`, exibe `PRAZO X DIAS` durante os 10 dias anteriores ao vencimento, passa para `EXPIRADO` após a data e só retorna a `ATIVO` quando alguém confirma a renovação. A entrada fixa é registrada como recebida ao cadastrar o cliente. Clientes cancelados permanecem na lista, mas a mensalidade fica `CANCELADO` e deixa de contar como receita recorrente ou valor a receber. Na Visão Geral, a receita inclui mensalidades `ATIVO` e valores recebidos; “A receber” soma cobranças no contador, expiradas e lançamentos pendentes. Lançamentos, inclusive os vinculados a clientes, podem ser excluídos manualmente no Financeiro; uma mensalidade excluída não é recriada até a próxima renovação, enquanto uma entrada fixa excluída permanece removida.
 
-No Sidebar, o Nexo exibe o nome registrado para a pessoa na aba Equipe ou o campo `usuario` do vínculo `companyMemberships/{UID}`. A função da pessoa é exibida como privilégio; se não houver registro de equipe, o app usa **Administrador** quando `canManageUsers` for `true` e **Membro** nos demais casos. Para uma conta vinculada manualmente, preencha `usuario` com o nome que deseja exibir.
+No Sidebar, o Ascend exibe o nome registrado para a pessoa na aba Equipe ou o campo `usuario` do vínculo `companyMemberships/{UID}`. A função da pessoa é exibida como privilégio; se não houver registro de equipe, o app usa **Administrador** quando `canManageUsers` for `true` e **Membro** nos demais casos. Para uma conta vinculada manualmente, preencha `usuario` com o nome que deseja exibir.
 
 Clique no nome ou no avatar do Sidebar para informar uma URL pública da imagem. O valor é salvo no campo `photoUrl` do vínculo daquela conta; deixe o campo vazio para remover a foto. Use uma URL direta `http://` ou `https://` com no máximo 2048 caracteres. Para aplicar esta edição em um projeto já configurado, publique também as regras atualizadas de [`firestore.rules`](./firestore.rules) no Console do Firebase e publique a nova versão do app.
 

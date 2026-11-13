@@ -89,13 +89,27 @@ export async function createCloudService(uid, service) {
   await setDoc(doc(servicesCollection, service.id), service);
 }
 
-export async function updateCloudService(uid, serviceId, changes) {
+export async function updateCloudService(uid, serviceId, changes, updateClients, validateData) {
   if (!uid) throw new Error("Não há uma sessão autenticada para atualizar o serviço.");
   const database = getDatabase();
-  const membershipSnapshot = await getDoc(doc(database, MEMBERSHIPS_COLLECTION, uid));
-  if (!membershipSnapshot.exists()) throw new Error("Esta conta não está vinculada a uma empresa.");
-  const serviceDocument = doc(getCompanyServicesCollection(database, getCompanyId(membershipSnapshot.data())), serviceId);
-  await updateDoc(serviceDocument, changes);
+  const membershipDocument = doc(database, MEMBERSHIPS_COLLECTION, uid);
+  await runTransaction(database, async (transaction) => {
+    const membershipSnapshot = await transaction.get(membershipDocument);
+    if (!membershipSnapshot.exists()) throw new Error("Esta conta não está vinculada a uma empresa.");
+    const companyId = getCompanyId(membershipSnapshot.data());
+    const serviceDocument = doc(getCompanyServicesCollection(database, companyId), serviceId);
+    const companyDocument = getCompanyDocument(database, companyId);
+    const serviceSnapshot = await transaction.get(serviceDocument);
+    const companySnapshot = await transaction.get(companyDocument);
+    if (!serviceSnapshot.exists()) throw new Error("O serviço não foi encontrado no Firestore.");
+    if (!companySnapshot.exists()) throw new Error("Os dados compartilhados da empresa não foram encontrados.");
+
+    const currentData = validateData(companySnapshot.data());
+    const currentService = { ...serviceSnapshot.data(), id: serviceSnapshot.id };
+    const nextData = updateClients(currentData, currentService, changes);
+    transaction.update(serviceDocument, changes);
+    if (nextData !== currentData) transaction.set(companyDocument, nextData);
+  });
 }
 
 export async function deleteCloudService(uid, serviceId) {
