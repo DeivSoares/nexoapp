@@ -365,6 +365,14 @@ export function getMonthlyIncome(transactions, month = getMonthKey()) {
     .reduce((total, entry) => total + Number(entry.amount), 0);
 }
 
+export function getConfirmedIncome(transactions, month) {
+  return transactions
+    .filter((entry) => entry.type === "income"
+      && (entry.status === "Recebido" || entry.status === "Pago")
+      && entry.date?.startsWith(month))
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+}
+
 export function getReceivableTotal(transactions) {
   return transactions
     .filter((entry) => entry.type === "income" && (entry.status === "Pendente" || entry.status === CLIENT_EXPIRED || /^PRAZO \d+ DIAS$/.test(entry.status || "")))

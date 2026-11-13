@@ -147,10 +147,10 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #e9ecf2; border-radius
 .chart-summary strong { font-family: "Segoe UI",Arial,sans-serif; font-size: 20px; }
 .chart-summary span { font-size: 10px; }
 .chart { display: flex; height: 153px; align-items: flex-end; gap: 10px; padding: 6px 2px 0; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(to bottom,transparent 0,transparent 37px,#f1f3f7 38px,#f1f3f7 39px); }
-.chart-column { display: flex; height: 100%; flex: 1; flex-direction: column; align-items: center; justify-content: flex-end; gap: 7px; }
-.chart-bar { width: min(28px,70%); min-height: 4px; border-radius: 5px 5px 0 0; background: #ccd3ff; transition: height .2s; }
+.chart-column { position: relative; height: 100%; flex: 1; }
+.chart-bar { position: absolute; bottom: 25px; left: 50%; width: min(28px,70%); max-height: calc(100% - 25px); border-radius: 5px 5px 0 0; background: #ccd3ff; transform: translateX(-50%); transition: height .2s; }
 .chart-bar.is-current { background: var(--blue); }
-.chart-column span { padding-bottom: 9px; color: #9aa2b2; font-size: 9px; }
+.chart-column span { position: absolute; bottom: 0; left: 50%; padding-bottom: 9px; color: #9aa2b2; font-size: 9px; transform: translateX(-50%); }
 .activity-list { display: grid; }
 .activity-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-bottom: 1px solid #f0f2f6; }
 .activity-item:last-child { border-bottom: 0; }

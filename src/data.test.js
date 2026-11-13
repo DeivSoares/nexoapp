@@ -5,6 +5,7 @@ import {
   deleteTransaction,
   getClientRenewalStatus,
   getMonthlyIncome,
+  getConfirmedIncome,
   getReceivableTotal,
   getRevenueTotal,
   getUpcomingRenewals,
@@ -193,4 +194,15 @@ test("overview totals include active recurring revenue and exclude canceled reve
   assert.equal(getRevenueTotal(transactions), 300);
   assert.equal(getMonthlyIncome(transactions, "2026-10"), 300);
   assert.equal(getReceivableTotal(transactions), 205);
+});
+
+test("monthly income includes active recurring revenue while history uses confirmed transactions", () => {
+  const transactions = [
+    { amount: 250, type: "income", status: "ATIVO", revenueKind: "monthly", date: "2026-10-24" },
+    { amount: 100, type: "income", status: "Recebido", date: "2026-10-10" },
+  ];
+
+  assert.equal(getMonthlyIncome(transactions, "2026-10"), 350);
+  assert.equal(getConfirmedIncome(transactions, "2026-10"), 100);
+  assert.equal(getConfirmedIncome(transactions, "2026-11"), 0);
 });

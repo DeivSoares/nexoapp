@@ -13,6 +13,7 @@ import {
   formatShortDate,
   getDateInDays,
   getClientRenewalStatus,
+  getConfirmedIncome,
   getMonthKey,
   getMonthlyIncome,
   getReceivableTotal,
@@ -330,12 +331,17 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
   const today = new Date();
   const dateLabel = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toLocaleUpperCase("pt-BR");
   const greeting = today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite";
-  const monthValues = Array.from({ length: 6 }, (_, index) => getMonthKey(index - 5)).map((month) => data.transactions
-    .filter((entry) => entry.type === "income" && ["Recebido", "Pago"].includes(entry.status) && entry.date?.startsWith(month))
-    .reduce((total, entry) => total + Number(entry.amount), 0));
-  const maxMonthValue = Math.max(...monthValues, 1);
-  const confirmedMonthIncome = monthValues[monthValues.length - 1];
   const monthLabels = Array.from({ length: 6 }, (_, index) => getMonthKey(index - 5));
+  const currentMonth = getMonthKey();
+  const monthValues = monthLabels.map((month) => month === currentMonth
+    ? getMonthlyIncome(data.transactions, month)
+    : getConfirmedIncome(data.transactions, month));
+  const maxMonthValue = Math.max(...monthValues, 1);
+  const chartDescription = monthLabels.map((month, index) => {
+    const date = new Date(`${month}-01T12:00:00`);
+    const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
+    return `${label}: ${formatCurrency(monthValues[index])}`;
+  }).join("; ");
 
   return (
     <>
@@ -351,12 +357,12 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
       </section>
       <section className="overview-grid">
         <article className="panel">
-          <div className="panel-heading"><div><h2>Receita ao longo do tempo</h2><p>Entradas confirmadas nos últimos 6 meses</p></div><span className="role-pill">Mensal</span></div>
-          <div className="chart-summary"><strong>{formatCurrency(confirmedMonthIncome)}</strong><span className="positive">recebido este mês</span></div>
-          <div className="chart">{monthValues.map((value, index) => {
+          <div className="panel-heading"><div><h2>Receita ao longo do tempo</h2><p>Recebimentos dos últimos 6 meses e mensalidades ativas neste mês</p></div><span className="role-pill">Mensal</span></div>
+          <div className="chart-summary"><strong>{formatCurrency(monthIncome)}</strong><span className="positive">receita este mês</span></div>
+          <div className="chart" role="img" aria-label={chartDescription}>{monthValues.map((value, index) => {
             const date = new Date(`${monthLabels[index]}-01T12:00:00`);
             const label = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
-            return <div className="chart-column" key={monthLabels[index]}><div className={`chart-bar ${index === monthValues.length - 1 ? "is-current" : ""}`} style={{ height: `${Math.max(value / maxMonthValue * 100, 3)}%` }} /><span>{label}</span></div>;
+            return <div className="chart-column" key={monthLabels[index]}><div className={`chart-bar ${index === monthValues.length - 1 ? "is-current" : ""}`} style={{ height: `${value > 0 ? value / maxMonthValue * 100 : 0}%` }} title={`${label}: ${formatCurrency(value)}`} /><span>{label}</span></div>;
           })}</div>
         </article>
         <article className="panel">
