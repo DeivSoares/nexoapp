@@ -378,6 +378,22 @@ export function getRevenueTotal(transactions) {
     .reduce((total, entry) => total + Number(entry.amount), 0);
 }
 
+export function getFinanceAllocation(transactions, plan = {}) {
+  const settings = plan || {};
+  const revenue = getRevenueTotal(transactions);
+  const expenses = transactions
+    .filter((entry) => entry.type === "expense")
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+  const operatingBalance = revenue - expenses;
+  const availableBalance = Math.max(0, operatingBalance);
+  const saving = availableBalance * Math.min(100, Math.max(0, Number(settings.savingPercent) || 0)) / 100
+    + Math.max(0, Number(settings.savingFixed) || 0);
+  const investing = availableBalance * Math.min(100, Math.max(0, Number(settings.investingPercent) || 0)) / 100
+    + Math.max(0, Number(settings.investingFixed) || 0);
+
+  return { operatingBalance, saving, investing, total: saving + investing };
+}
+
 export function getMonthlyIncome(transactions, month = getMonthKey()) {
   return transactions
     .filter((entry) => (

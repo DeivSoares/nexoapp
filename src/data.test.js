@@ -4,6 +4,7 @@ import {
   confirmClientRenewal,
   deleteTransaction,
   getClientRenewalStatus,
+  getFinanceAllocation,
   getMonthlyIncome,
   getConfirmedIncome,
   getReceivableTotal,
@@ -229,6 +230,44 @@ test("overview totals include active recurring revenue and exclude canceled reve
   assert.equal(getRevenueTotal(transactions), 300);
   assert.equal(getMonthlyIncome(transactions, "2026-10"), 300);
   assert.equal(getReceivableTotal(transactions), 205);
+});
+
+test("calculates saving and investing from the positive operating balance plus fixed values", () => {
+  const transactions = [
+    { type: "income", status: "Recebido", amount: 1000 },
+    { type: "expense", status: "Pendente", amount: 250 },
+  ];
+
+  assert.deepEqual(getFinanceAllocation(transactions, {
+    savingPercent: 10,
+    savingFixed: 50,
+    investingPercent: 20,
+    investingFixed: 25,
+  }), {
+    operatingBalance: 750,
+    saving: 125,
+    investing: 175,
+    total: 300,
+  });
+});
+
+test("does not apply percentages to a negative balance and ignores invalid negative plan values", () => {
+  const transactions = [
+    { type: "income", status: "Recebido", amount: 100 },
+    { type: "expense", amount: 200 },
+  ];
+
+  assert.deepEqual(getFinanceAllocation(transactions, {
+    savingPercent: 30,
+    savingFixed: 20,
+    investingPercent: 150,
+    investingFixed: -5,
+  }), {
+    operatingBalance: -100,
+    saving: 20,
+    investing: 0,
+    total: 20,
+  });
 });
 
 test("monthly income includes active recurring revenue while history uses confirmed transactions", () => {

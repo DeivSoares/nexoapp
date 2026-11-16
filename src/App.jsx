@@ -11,6 +11,7 @@ import {
   deleteTeamMemberAccount,
   formatCurrency,
   formatShortDate,
+  getFinanceAllocation,
   getDateInDays,
   getClientRenewalStatus,
   getConfirmedIncome,
@@ -333,6 +334,7 @@ function ProfileAvatar({ profile, className = "" }) {
 
 function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
   const monthIncome = getMonthlyIncome(data.transactions, getMonthKey());
+  const financeAllocation = getFinanceAllocation(data.transactions, data.financePlan);
   const pending = getReceivableTotal(data.transactions);
   const activeServices = data.services.filter((service) => service.status === "Ativo").length;
   const dueSoon = getUpcomingRenewals(data.clients);
@@ -357,11 +359,12 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
         <div className="welcome-copy"><span>{dateLabel}</span><h1>{greeting}{userName ? `, ${userName}` : ""} 👋</h1><p>Acompanhe a saúde da sua operação em um só lugar.</p></div>
         <button className="button" type="button" onClick={onNewClient}><span className="button-symbol">+</span> Novo cliente</button>
       </section>
-      <section className="metric-grid">
+      <section className="metric-grid overview-metrics">
         <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "ATIVO").length} icon="◎" note={`${data.clients.length} cadastrados`} />
         <Metric title="Receita do mês" value={formatCurrency(monthIncome)} icon="R$" note="Mensalidades ativas e receitas recebidas" tone="green" />
         <Metric title="Serviços ativos" value={activeServices} icon="⌘" note={`${data.services.length} serviços cadastrados`} tone="orange" />
         <Metric title="A receber" value={formatCurrency(pending)} icon="↗" note="Lançamentos pendentes" tone="pink" />
+        <Metric title="Separado para guardar/investir" value={formatCurrency(financeAllocation.total)} icon="↗" note={`Guardar ${formatCurrency(financeAllocation.saving)} · Investir ${formatCurrency(financeAllocation.investing)}`} tone="green" />
       </section>
       <section className="overview-grid">
         <article className="panel">
@@ -418,11 +421,29 @@ function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }
   );
 }
 
-function FinancePage({ data, search, onNew, onDelete }) {
+function FinancePage({ data, search, onNew, onDelete, onSavePlan }) {
+  const [draftPlan, setDraftPlan] = useState(() => ({
+    savingPercent: data.financePlan?.savingPercent ?? 0,
+    savingFixed: data.financePlan?.savingFixed ?? 0,
+    investingPercent: data.financePlan?.investingPercent ?? 0,
+    investingFixed: data.financePlan?.investingFixed ?? 0,
+  }));
   const transactions = data.transactions.filter((entry) => [entry.description, entry.category, entry.type, entry.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search))).sort((a, b) => b.date.localeCompare(a.date));
   const income = getRevenueTotal(data.transactions);
   const expense = data.transactions.filter((item) => item.type === "expense").reduce((total, item) => total + Number(item.amount), 0);
   const pending = getReceivableTotal(data.transactions);
+  const allocation = getFinanceAllocation(data.transactions, draftPlan);
+
+  function submitPlan(event) {
+    event.preventDefault();
+    onSavePlan({
+      savingPercent: Number(draftPlan.savingPercent),
+      savingFixed: Number(draftPlan.savingFixed),
+      investingPercent: Number(draftPlan.investingPercent),
+      investingFixed: Number(draftPlan.investingFixed),
+    });
+  }
+
   return (
     <>
       <PageHeading title="Financeiro" description="Acompanhe receitas, despesas e valores a receber." action={<button className="button button-primary" type="button" onClick={onNew}><span className="button-symbol">+</span> Novo lançamento</button>} />
@@ -430,18 +451,38 @@ function FinancePage({ data, search, onNew, onDelete }) {
         <article className="finance-card income"><span>Receitas registradas</span><strong>{formatCurrency(income)}</strong></article>
         <article className="finance-card expense"><span>Despesas registradas</span><strong>{formatCurrency(expense)}</strong></article>
         <article className="finance-card"><span>Saldo da operação</span><strong>{formatCurrency(income - expense)}</strong></article>
+        <article className="finance-card allocation-total"><span>Total separado</span><strong>{formatCurrency(allocation.total)}</strong></article>
       </section>
-      <section className="panel table-panel">
-        <div className="panel-heading"><div><h2>Lançamentos</h2><p>{formatCurrency(pending)} aguardando recebimento</p></div></div>
-        <DataTable columns={["DESCRIÇÃO", "CATEGORIA", "DATA", "TIPO", "VALOR", "STATUS", "AÇÕES"]}>
-          {transactions.map((entry) => <tr key={entry.id}>
-            <td><strong className="table-strong">{entry.description}</strong></td><td>{entry.category}</td><td>{formatShortDate(entry.date)}</td>
-            <td><span className={entry.type === "income" ? "positive" : ""}>{entry.type === "income" ? "Receita" : "Despesa"}</span></td>
-            <td className={entry.type === "income" ? "amount-income" : "amount-expense"}>{entry.type === "income" ? "+" : "−"} {formatCurrency(entry.amount)}</td>
-            <td><Status value={entry.status} /></td><td><button className="row-action" type="button" onClick={() => onDelete(entry)} aria-label={`Excluir lançamento ${entry.description}`} title="Excluir lançamento">×</button></td>
-          </tr>)}
-          {!transactions.length && <tr><td colSpan="7" className="empty-state">{data.transactions.length ? "Nenhum lançamento encontrado." : "Adicione seu primeiro lançamento."}</td></tr>}
-        </DataTable>
+      <section className="finance-workspace">
+        <section className="panel table-panel">
+          <div className="panel-heading"><div><h2>Lançamentos</h2><p>{formatCurrency(pending)} aguardando recebimento</p></div></div>
+          <DataTable columns={["DESCRIÇÃO", "CATEGORIA", "DATA", "TIPO", "VALOR", "STATUS", "AÇÕES"]}>
+            {transactions.map((entry) => <tr key={entry.id}>
+              <td><strong className="table-strong">{entry.description}</strong></td><td>{entry.category}</td><td>{formatShortDate(entry.date)}</td>
+              <td><span className={entry.type === "income" ? "positive" : ""}>{entry.type === "income" ? "Receita" : "Despesa"}</span></td>
+              <td className={entry.type === "income" ? "amount-income" : "amount-expense"}>{entry.type === "income" ? "+" : "−"} {formatCurrency(entry.amount)}</td>
+              <td><Status value={entry.status} /></td><td><button className="row-action" type="button" onClick={() => onDelete(entry)} aria-label={`Excluir lançamento ${entry.description}`} title="Excluir lançamento">×</button></td>
+            </tr>)}
+            {!transactions.length && <tr><td colSpan="7" className="empty-state">{data.transactions.length ? "Nenhum lançamento encontrado." : "Adicione seu primeiro lançamento."}</td></tr>}
+          </DataTable>
+        </section>
+        <section className="panel finance-allocation-panel">
+          <div className="panel-heading"><div><h2>Separar investimento</h2><p>Defina percentuais e valores fixos para seu saldo.</p></div></div>
+          <div className="allocation-results">
+            <article><span>Guardar</span><strong>{formatCurrency(allocation.saving)}</strong></article>
+            <article><span>Investir</span><strong>{formatCurrency(allocation.investing)}</strong></article>
+          </div>
+          <p className="allocation-note">Percentuais calculados sobre o saldo positivo da operação ({formatCurrency(allocation.operatingBalance)}). Valores fixos são somados ao cálculo.</p>
+          <form className="allocation-form" onSubmit={submitPlan}>
+            <div className="allocation-fields">
+              <div className="form-field"><label htmlFor="saving-percent">Guardar (%)</label><input id="saving-percent" name="savingPercent" type="number" min="0" max="100" step="0.01" value={draftPlan.savingPercent} onChange={(event) => setDraftPlan((current) => ({ ...current, savingPercent: event.target.value }))} /></div>
+              <div className="form-field"><label htmlFor="saving-fixed">Valor fixo (R$)</label><input id="saving-fixed" name="savingFixed" type="number" min="0" step="0.01" value={draftPlan.savingFixed} onChange={(event) => setDraftPlan((current) => ({ ...current, savingFixed: event.target.value }))} /></div>
+              <div className="form-field"><label htmlFor="investing-percent">Investir (%)</label><input id="investing-percent" name="investingPercent" type="number" min="0" max="100" step="0.01" value={draftPlan.investingPercent} onChange={(event) => setDraftPlan((current) => ({ ...current, investingPercent: event.target.value }))} /></div>
+              <div className="form-field"><label htmlFor="investing-fixed">Valor fixo (R$)</label><input id="investing-fixed" name="investingFixed" type="number" min="0" step="0.01" value={draftPlan.investingFixed} onChange={(event) => setDraftPlan((current) => ({ ...current, investingFixed: event.target.value }))} /></div>
+            </div>
+            <button className="button button-primary allocation-save" type="submit">Salvar separação</button>
+          </form>
+        </section>
       </section>
     </>
   );
@@ -913,7 +954,7 @@ export default function App() {
         <main className="page-content" id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
           {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
-          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} />}
+          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} onSavePlan={(financePlan) => commit((current) => ({ ...current, financePlan }), "Separação para guardar e investir salva.")} />}
           {currentPage === "services" && <ServicesPage {...common} onNew={() => { setEditingService(null); setDialogType("service"); }} onEdit={(service) => { setEditingService(service); setDialogType("service"); }} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}
         </main>
