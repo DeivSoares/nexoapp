@@ -105,6 +105,10 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #e9ecf2; border-radius
 .top-avatar { width: 32px; height: 32px; }
 .mobile-menu { display: none; }
 .page-content { width: min(100%, 1440px); min-height: calc(100vh - 114px); margin: 0 auto; padding: 34px 38px 40px; }
+.page-content.is-fading-out { animation: page-fade-out .15s ease both; pointer-events: none; }
+.page-content.is-fading-in { animation: page-fade-in .22s ease both; }
+@keyframes page-fade-out { to { opacity: 0; transform: translateY(5px); } }
+@keyframes page-fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .page-footer { display: flex; justify-content: space-between; padding: 15px 38px 20px; border-top: 1px solid var(--line); color: #a1a8b7; font-size: 10px; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 25px; }
 .page-heading h1 { margin: 4px 0 5px; font-family: "Segoe UI",Arial,sans-serif; font-size: 25px; font-weight: 700; letter-spacing: -.8px; }
@@ -146,13 +150,22 @@ kbd { flex: 0 0 auto; padding: 2px 4px; border: 1px solid #e9ecf2; border-radius
 .panel-heading h2 { margin: 0; font-size: 13px; font-weight: 700; }
 .panel-heading p { margin: 5px 0 0; color: #9aa2b2; font-size: 10px; }
 .select-control { min-height: 31px; padding: 0 26px 0 9px; border: 1px solid #e9ecf2; border-radius: 7px; background: #fff; color: #626c80; font-size: 10px; }
+.chart-totals { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .chart-summary { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 8px; }
 .chart-summary strong { font-family: "Segoe UI",Arial,sans-serif; font-size: 20px; }
 .chart-summary span { font-size: 10px; }
+.chart-outflow-label { color: var(--red); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 9px; padding-top: 2px; color: var(--muted); font-size: 9px; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.chart-legend i { width: 7px; height: 7px; border-radius: 2px; }
+.chart-legend-income { background: var(--blue); }
+.chart-legend-outflow { background: var(--red); }
 .chart { display: flex; height: 153px; align-items: flex-end; gap: 10px; padding: 6px 2px 0; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(to bottom,transparent 0,transparent 37px,#f1f3f7 38px,#f1f3f7 39px); }
 .chart-column { position: relative; height: 100%; flex: 1; }
-.chart-bar { position: absolute; bottom: 25px; left: 50%; width: min(28px,70%); max-height: calc(100% - 25px); border-radius: 5px 5px 0 0; background: #ccd3ff; transform: translateX(-50%); transition: height .2s; }
-.chart-bar.is-current { background: var(--blue); }
+.chart-bars { position: absolute; inset: 0 0 25px; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.chart-bar { width: min(14px,40%); max-height: 100%; border-radius: 4px 4px 0 0; background: #ccd3ff; transition: height .2s; }
+.chart-bar.is-income { background: var(--blue); }
+.chart-bar.is-expense { background: var(--red); }
 .chart-column span { position: absolute; bottom: 0; left: 50%; padding-bottom: 9px; color: #9aa2b2; font-size: 9px; transform: translateX(-50%); }
 .activity-list { display: grid; }
 .activity-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 0; border-bottom: 1px solid #f0f2f6; }
@@ -269,6 +282,7 @@ tbody tr:last-child td { border-bottom: 0; }
 :root[data-theme="dark"] .metric-icon.pink { background: #3b2935; color: #ef8da6; }
 :root[data-theme="dark"] .chart { background: repeating-linear-gradient(to bottom,transparent 0,transparent 37px,#283246 38px,#283246 39px); }
 :root[data-theme="dark"] .chart-bar { background: #5363aa; }
+:root[data-theme="dark"] .chart-bar.is-expense { background: var(--red); }
 :root[data-theme="dark"] .activity-item,
 :root[data-theme="dark"] th,
 :root[data-theme="dark"] td,
@@ -426,4 +440,5 @@ td { border-color: #ffffff8f; }
 :root[data-theme="dark"] .chart { border-color: #ffffff28; background: repeating-linear-gradient(to bottom,transparent 0,transparent 37px,#ffffff12 38px,#ffffff12 39px); }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+  .page-content.is-fading-out,.page-content.is-fading-in { animation: none; }
 }

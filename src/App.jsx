@@ -18,6 +18,7 @@ import {
   getConfirmedIncome,
   getMonthKey,
   getMonthlyIncome,
+  getMonthlyOutflow,
   getReceivableTotal,
   getRevenueTotal,
   getUpcomingRenewals,
@@ -37,6 +38,8 @@ import ascendMark from "./assets/ascend-mark.svg";
 const loginPath = `${import.meta.env.BASE_URL}login.html`;
 const themeStorageKey = "ascend-theme";
 const legacyThemeStorageKey = "nexo-theme";
+const PAGE_FADE_OUT_DURATION = 150;
+const PAGE_FADE_IN_DURATION = 220;
 
 const pages = {
   overview: "Visão geral",
@@ -364,14 +367,20 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
   const greeting = today.getHours() < 12 ? "Bom dia" : today.getHours() < 18 ? "Boa tarde" : "Boa noite";
   const monthLabels = Array.from({ length: 6 }, (_, index) => getMonthKey(index - 5));
   const currentMonth = getMonthKey();
-  const monthValues = monthLabels.map((month) => month === currentMonth
-    ? getMonthlyIncome(data.transactions, month)
-    : getConfirmedIncome(data.transactions, month));
-  const maxMonthValue = Math.max(...monthValues, 1);
+  const monthValues = monthLabels.map((month) => ({
+    month,
+    income: month === currentMonth
+      ? getMonthlyIncome(data.transactions, month)
+      : getConfirmedIncome(data.transactions, month),
+    outflow: getMonthlyOutflow(data.transactions, month, data.financePlan),
+  }));
+  const maxMonthValue = Math.max(...monthValues.flatMap(({ income, outflow }) => [income, outflow.total]), 1);
+  const currentOutflow = monthValues[monthValues.length - 1].outflow.total;
   const chartDescription = monthLabels.map((month, index) => {
     const date = new Date(`${month}-01T12:00:00`);
     const label = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
-    return `${label}: ${formatCurrency(monthValues[index])}`;
+    const values = monthValues[index];
+    return `${label}: entradas ${formatCurrency(values.income)}, saídas ${formatCurrency(values.outflow.total)}, incluindo despesas de ${formatCurrency(values.outflow.expenses)}, guardar ${formatCurrency(values.outflow.saving)} e investir ${formatCurrency(values.outflow.investing)}`;
   }).join("; ");
 
   return (
@@ -389,12 +398,18 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
       </section>
       <section className="overview-grid">
         <article className="panel">
-          <div className="panel-heading"><div><h2>Receita ao longo do tempo</h2><p>Recebimentos dos últimos 6 meses e mensalidades ativas neste mês</p></div><span className="role-pill">Mensal</span></div>
-          <div className="chart-summary"><strong>{formatCurrency(monthIncome)}</strong><span className="positive">receita este mês</span></div>
-          <div className="chart" role="img" aria-label={chartDescription}>{monthValues.map((value, index) => {
-            const date = new Date(`${monthLabels[index]}-01T12:00:00`);
+          <div className="panel-heading"><div><h2>Entradas e saídas ao longo do tempo</h2><p>Saídas incluem despesas e valores separados segundo as regras atuais de guardar e investir.</p></div><div className="chart-legend"><span><i className="chart-legend-income" />Entradas</span><span><i className="chart-legend-outflow" />Saídas</span></div></div>
+          <div className="chart-totals">
+            <div className="chart-summary"><strong>{formatCurrency(monthIncome)}</strong><span className="positive">entradas este mês</span></div>
+            <div className="chart-summary"><strong>{formatCurrency(currentOutflow)}</strong><span className="chart-outflow-label">saídas este mês</span></div>
+          </div>
+          <div className="chart" role="img" aria-label={chartDescription}>{monthValues.map(({ month, income, outflow }, index) => {
+            const date = new Date(`${month}-01T12:00:00`);
             const label = new Intl.DateTimeFormat("pt-BR", { month: "short" }).format(date).replace(".", "");
-            return <div className="chart-column" key={monthLabels[index]}><div className={`chart-bar ${index === monthValues.length - 1 ? "is-current" : ""}`} style={{ height: `${value > 0 ? value / maxMonthValue * 100 : 0}%` }} title={`${label}: ${formatCurrency(value)}`} /><span>{label}</span></div>;
+            return <div className="chart-column" key={month}><div className="chart-bars">
+              <div className="chart-bar is-income" style={{ height: `${income > 0 ? income / maxMonthValue * 100 : 0}%` }} title={`${label}: entradas ${formatCurrency(income)}`} />
+              <div className="chart-bar is-expense" style={{ height: `${outflow.total > 0 ? outflow.total / maxMonthValue * 100 : 0}%` }} title={`${label}: saídas ${formatCurrency(outflow.total)}`} />
+            </div><span>{label}</span></div>;
           })}</div>
         </article>
         <article className="panel">
@@ -569,6 +584,7 @@ export default function App() {
   const [membership, setMembership] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentPage, setCurrentPage] = useState("overview");
+  const [pageTransition, setPageTransition] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [theme, setTheme] = useState(getSavedTheme);
   const [dialogType, setDialogType] = useState("");
@@ -581,12 +597,18 @@ export default function App() {
   const [loggingOut, setLoggingOut] = useState(false);
   const dataRef = useRef(null);
   const writeQueueRef = useRef(Promise.resolve());
+  const pageTransitionTimerRef = useRef(null);
+  const pendingPageRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem(themeStorageKey, theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#101522" : "#f5f7fb");
   }, [theme]);
+
+  useEffect(() => () => {
+    if (pageTransitionTimerRef.current) window.clearTimeout(pageTransitionTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!firebaseConfigured || !firebaseAuth) {
@@ -700,8 +722,7 @@ export default function App() {
   function submitSearch(event) {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    setCurrentPage("clients");
-    setMenuOpen(false);
+    navigate("clients", true);
   }
 
   function commit(update, message) {
@@ -903,10 +924,37 @@ export default function App() {
       });
   }
 
-  function navigate(page) {
-    setCurrentPage(page);
-    setSearchTerm("");
+  function navigate(page, preserveSearch = false) {
+    if (page === currentPage && !pendingPageRef.current) {
+      if (!preserveSearch) setSearchTerm("");
+      setMenuOpen(false);
+      return;
+    }
+
+    pendingPageRef.current = page;
+    if (!preserveSearch) setSearchTerm("");
     setMenuOpen(false);
+
+    if (pageTransitionTimerRef.current) window.clearTimeout(pageTransitionTimerRef.current);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setCurrentPage(page);
+      setPageTransition("");
+      pendingPageRef.current = null;
+      pageTransitionTimerRef.current = null;
+      return;
+    }
+
+    setPageTransition("is-fading-out");
+    pageTransitionTimerRef.current = window.setTimeout(() => {
+      const nextPage = pendingPageRef.current;
+      pendingPageRef.current = null;
+      setCurrentPage(nextPage);
+      setPageTransition("is-fading-in");
+      pageTransitionTimerRef.current = window.setTimeout(() => {
+        setPageTransition("");
+        pageTransitionTimerRef.current = null;
+      }, PAGE_FADE_IN_DURATION);
+    }, PAGE_FADE_OUT_DURATION);
   }
 
   async function handleSignOut() {
@@ -980,7 +1028,7 @@ export default function App() {
             <ProfileAvatar profile={profile} className="top-avatar" />
           </div>
         </header>
-        <main className="page-content" id="page-content" tabIndex="-1">
+        <main className={`page-content${pageTransition ? ` ${pageTransition}` : ""}`} id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
           {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
           {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} onSavePlan={(financePlan) => commit((current) => {

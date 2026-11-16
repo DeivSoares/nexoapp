@@ -6,6 +6,7 @@ import {
   getClientRenewalStatus,
   getFinanceAllocation,
   formatActivityDate,
+  getMonthlyOutflow,
   getMonthlyIncome,
   getConfirmedIncome,
   getReceivableTotal,
@@ -259,6 +260,28 @@ test("formats activity timestamps as today, yesterday, or their actual date", ()
   assert.equal(formatActivityDate(new Date(2026, 10, 15, 9, 30), now), "Ontem, 09:30");
   assert.equal(formatActivityDate(new Date(2026, 10, 14, 9, 30), now), "14/11/2026, 09:30");
   assert.equal(formatActivityDate("invalid", now), "");
+});
+
+test("monthly outflow includes expenses and calculated saving and investment values", () => {
+  const transactions = [
+    { type: "income", status: "Recebido", amount: 1000, date: "2026-10-10" },
+    { type: "income", status: "Pendente", amount: 500, date: "2026-10-12" },
+    { type: "income", revenueKind: "monthly", status: "ATIVO", amount: 400, date: "2026-10-20" },
+    { type: "expense", status: "Pago", amount: 200, date: "2026-10-15" },
+    { type: "expense", status: "Pendente", amount: 50, date: "2026-11-02" },
+  ];
+
+  assert.deepEqual(getMonthlyOutflow(transactions, "2026-10", {
+    savingPercent: 10,
+    savingFixed: 20,
+    investingPercent: 20,
+    investingFixed: 30,
+  }), {
+    expenses: 200,
+    saving: 100,
+    investing: 190,
+    total: 490,
+  });
 });
 
 test("does not apply percentages to a negative balance and ignores invalid negative plan values", () => {

@@ -379,19 +379,21 @@ export function getRevenueTotal(transactions) {
 }
 
 export function getFinanceAllocation(transactions, plan = {}) {
-  const settings = plan || {};
   const revenue = getRevenueTotal(transactions);
   const expenses = transactions
     .filter((entry) => entry.type === "expense")
     .reduce((total, entry) => total + Number(entry.amount), 0);
   const operatingBalance = revenue - expenses;
-  const availableBalance = Math.max(0, operatingBalance);
+  return { operatingBalance, ...getPlannedAllocation(Math.max(0, operatingBalance), plan) };
+}
+
+function getPlannedAllocation(availableBalance, plan = {}) {
+  const settings = plan || {};
   const saving = availableBalance * Math.min(100, Math.max(0, Number(settings.savingPercent) || 0)) / 100
     + Math.max(0, Number(settings.savingFixed) || 0);
   const investing = availableBalance * Math.min(100, Math.max(0, Number(settings.investingPercent) || 0)) / 100
     + Math.max(0, Number(settings.investingFixed) || 0);
-
-  return { operatingBalance, saving, investing, total: saving + investing };
+  return { saving, investing, total: saving + investing };
 }
 
 export function getMonthlyIncome(transactions, month = getMonthKey()) {
@@ -410,6 +412,18 @@ export function getConfirmedIncome(transactions, month) {
       && (entry.status === "Recebido" || entry.status === "Pago")
       && entry.date?.startsWith(month))
     .reduce((total, entry) => total + Number(entry.amount), 0);
+}
+
+export function getMonthlyOutflow(transactions, month, plan = {}) {
+  const expenses = transactions
+    .filter((entry) => entry.type === "expense" && entry.date?.startsWith(month))
+    .reduce((total, entry) => total + Number(entry.amount), 0);
+  const income = month === getMonthKey()
+    ? getMonthlyIncome(transactions, month)
+    : getConfirmedIncome(transactions, month);
+  const operatingBalance = income - expenses;
+  const allocation = getPlannedAllocation(Math.max(0, operatingBalance), plan);
+  return { expenses, ...allocation, total: expenses + allocation.total };
 }
 
 export function getReceivableTotal(transactions) {
