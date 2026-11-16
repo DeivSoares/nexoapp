@@ -428,6 +428,25 @@ export function formatShortDate(value) {
     : "—";
 }
 
+export function formatActivityDate(value, now = new Date()) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const time = date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+  if (sameDay) return `Hoje, ${time}`;
+
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (date.getFullYear() === yesterday.getFullYear()
+    && date.getMonth() === yesterday.getMonth()
+    && date.getDate() === yesterday.getDate()) return `Ontem, ${time}`;
+
+  return `${date.toLocaleDateString("pt-BR")}, ${time}`;
+}
+
 export function getMonthKey(offset = 0) {
   const date = new Date();
   date.setDate(1);

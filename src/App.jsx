@@ -9,6 +9,7 @@ import {
   deleteTransaction,
   deleteService,
   deleteTeamMemberAccount,
+  formatActivityDate,
   formatCurrency,
   formatShortDate,
   getFinanceAllocation,
@@ -95,16 +96,36 @@ function PageHeading({ title, description, action }) {
   );
 }
 
-function ActivityList({ activity, limit = 4 }) {
+function ActivityList({ activity, transactions, limit = 4 }) {
   if (!activity.length) return <div className="empty-state">Ainda não há atividades registradas.</div>;
   return (
     <div className="activity-list">
-      {activity.slice(0, limit).map((entry, index) => (
-        <div className="activity-item" key={`${entry.time}-${index}`}>
-          <span className={`activity-dot ${entry.tone || ""}`} />
-          <div className="activity-text"><p>{entry.text}</p><small>{entry.time}</small></div>
-        </div>
-      ))}
+      {activity.slice(0, limit).map((entry, index) => {
+        const legacyDescription = !entry.createdAt && entry.text.startsWith("Novo lançamento: ")
+          ? entry.text.slice("Novo lançamento: ".length)
+          : "";
+        const relatedTransaction = legacyDescription
+          ? [...transactions].reverse().find((transaction) => transaction.description === legacyDescription)
+          : null;
+        const displayText = relatedTransaction
+          ? `${relatedTransaction.type === "income" ? "Entrada" : "Despesa"}: ${relatedTransaction.description} · ${formatCurrency(relatedTransaction.amount)}`
+          : entry.text;
+        const transactionDate = relatedTransaction?.date
+          ? new Date(`${relatedTransaction.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+          : "";
+        const displayTime = formatActivityDate(entry.createdAt)
+          || transactionDate
+          || (entry.time?.startsWith("Hoje, ")
+            ? `Data não registrada · ${entry.time.slice("Hoje, ".length)}`
+            : entry.time || "Data não registrada");
+
+        return (
+          <div className="activity-item" key={entry.createdAt || `${entry.text}-${index}`}>
+            <span className={`activity-dot ${entry.tone || ""}`} />
+            <div className="activity-text"><p>{displayText}</p><small>{displayTime}</small></div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -378,22 +399,24 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
         </article>
         <article className="panel">
           <div className="panel-heading"><div><h2>Atividade recente</h2><p>Últimas atualizações da operação</p></div></div>
-          <ActivityList activity={data.activity} />
+          <ActivityList activity={data.activity} transactions={data.transactions} />
         </article>
       </section>
-      <section className="panel table-panel">
-        <div className="panel-heading"><div><h2>Clientes recentes</h2><p>Visão rápida dos contratos da operação</p></div><button className="text-link" type="button" onClick={() => onNavigate("clients")}>Ver todos <span aria-hidden="true">→</span></button></div>
-        <DataTable columns={["CLIENTE", "SERVIÇO", "MENSALIDADE", "RENOVAÇÃO", "STATUS", ""]}>
-          {data.clients.slice(-4).reverse().map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatCurrency(client.monthly)}</td><td>{formatShortDate(client.renewal)}</td><td><Status value={client.status} /></td><td><button className="row-action" type="button" onClick={() => onDeleteClient(client)} aria-label={`Excluir ${client.name}`}>×</button></td></tr>)}
-          {!data.clients.length && <tr><td colSpan="6" className="empty-state">Cadastre seu primeiro cliente para começar.</td></tr>}
-        </DataTable>
-      </section>
-      <section className="panel table-panel" style={{ marginTop: 16 }}>
-        <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 10 dias</p></div></div>
-        <DataTable columns={["CLIENTE", "SERVIÇO", "RENOVAÇÃO", "VALOR", "STATUS"]}>
-          {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
-          {!dueSoon.length && <tr><td colSpan="5" className="empty-state">Nenhuma renovação nos próximos dias.</td></tr>}
-        </DataTable>
+      <section className="overview-tables">
+        <section className="panel table-panel">
+          <div className="panel-heading"><div><h2>Clientes recentes</h2><p>Visão rápida dos contratos da operação</p></div><button className="text-link" type="button" onClick={() => onNavigate("clients")}>Ver todos <span aria-hidden="true">→</span></button></div>
+          <DataTable columns={["CLIENTE", "SERVIÇO", "MENSALIDADE", "RENOVAÇÃO", "STATUS", ""]}>
+            {data.clients.slice(-4).reverse().map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatCurrency(client.monthly)}</td><td>{formatShortDate(client.renewal)}</td><td><Status value={client.status} /></td><td><button className="row-action" type="button" onClick={() => onDeleteClient(client)} aria-label={`Excluir ${client.name}`}>×</button></td></tr>)}
+            {!data.clients.length && <tr><td colSpan="6" className="empty-state">Cadastre seu primeiro cliente para começar.</td></tr>}
+          </DataTable>
+        </section>
+        <section className="panel table-panel">
+          <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 10 dias</p></div></div>
+          <DataTable columns={["CLIENTE", "SERVIÇO", "RENOVAÇÃO", "VALOR", "STATUS"]}>
+            {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
+            {!dueSoon.length && <tr><td colSpan="5" className="empty-state">Nenhuma renovação nos próximos dias.</td></tr>}
+          </DataTable>
+        </section>
       </section>
     </>
   );
@@ -450,7 +473,7 @@ function FinancePage({ data, search, onNew, onDelete, onSavePlan }) {
       <section className="finance-summary">
         <article className="finance-card income"><span>Receitas registradas</span><strong>{formatCurrency(income)}</strong></article>
         <article className="finance-card expense"><span>Despesas registradas</span><strong>{formatCurrency(expense)}</strong></article>
-        <article className="finance-card"><span>Saldo da operação</span><strong>{formatCurrency(income - expense)}</strong></article>
+        <article className="finance-card"><span>Saldo da operação</span><strong>{formatCurrency(income - expense)}</strong><span className="finance-card-note">Após descontar o total separado: {formatCurrency(allocation.operatingBalance - allocation.total)}</span></article>
         <article className="finance-card allocation-total"><span>Total separado</span><strong>{formatCurrency(allocation.total)}</strong></article>
       </section>
       <section className="finance-workspace">
@@ -701,7 +724,7 @@ export default function App() {
       ...current,
       activity: [{
         text,
-        time: `Hoje, ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+        createdAt: new Date().toISOString(),
         tone,
       }, ...current.activity].slice(0, 8),
     };
@@ -788,8 +811,13 @@ export default function App() {
         return addActivity(next, clientToUpdate ? `Cliente ${normalizedName} atualizado` : `Novo cliente ${normalizedName} cadastrado`);
       }
       if (type === "transaction") {
-        const next = { ...current, transactions: [...current.transactions, { id: createId("t"), ...values, amount: Number(values.amount), type: values.type === "Receita" ? "income" : "expense" }] };
-        return addActivity(next, `Novo lançamento: ${values.description}`, "orange");
+        const transaction = { id: createId("t"), ...values, amount: Number(values.amount), type: values.type === "Receita" ? "income" : "expense" };
+        const next = { ...current, transactions: [...current.transactions, transaction] };
+        const movement = transaction.type === "income"
+          ? `Entrada${transaction.category ? ` de ${transaction.category}` : ""}`
+          : `Despesa${transaction.category ? ` · ${transaction.category}` : ""}`;
+        const detail = `${movement}: ${transaction.description} · ${formatCurrency(transaction.amount)}`;
+        return addActivity(next, detail, transaction.type === "income" ? "green" : "orange");
       }
       const member = { id: createId("u"), ...values, name: normalizedName, initials: normalizedName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(), tone: "avatar-blue", status: "Ativo" };
       const next = { ...current, team: [...current.team, member] };
@@ -821,7 +849,8 @@ export default function App() {
         next.transactions = removeClientRevenue(current.transactions, item);
         next = addActivity(next, `Cliente ${item.name} removido`, "orange");
       } else if (collection === "transactions") {
-        next = addActivity(deleteTransaction(current, item.id), `Lançamento ${item.description} removido`, "orange");
+        const movement = item.type === "income" ? "Entrada" : "Despesa";
+        next = addActivity(deleteTransaction(current, item.id), `${movement} removida: ${item.description} · ${formatCurrency(item.amount)}`, "orange");
       }
       return next;
     }, collection === "transactions" ? "Lançamento removido." : "Registro removido.");
@@ -954,7 +983,10 @@ export default function App() {
         <main className="page-content" id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
           {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
-          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} onSavePlan={(financePlan) => commit((current) => ({ ...current, financePlan }), "Separação para guardar e investir salva.")} />}
+          {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} onSavePlan={(financePlan) => commit((current) => {
+            const allocation = getFinanceAllocation(current.transactions, financePlan);
+            return addActivity({ ...current, financePlan }, `Separação definida: Guardar ${formatCurrency(allocation.saving)} · Investir ${formatCurrency(allocation.investing)}`);
+          }, "Separação para guardar e investir salva.")} />}
           {currentPage === "services" && <ServicesPage {...common} onNew={() => { setEditingService(null); setDialogType("service"); }} onEdit={(service) => { setEditingService(service); setDialogType("service"); }} onDelete={(service) => deleteItem("services", service, `Excluir o serviço "${service.name}"?`)} onToggle={toggleService} />}
           {currentPage === "team" && <TeamPage {...common} onNew={() => setDialogType("member")} onDelete={deleteMember} />}
         </main>

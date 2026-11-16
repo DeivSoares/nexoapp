@@ -5,6 +5,7 @@ import {
   deleteTransaction,
   getClientRenewalStatus,
   getFinanceAllocation,
+  formatActivityDate,
   getMonthlyIncome,
   getConfirmedIncome,
   getReceivableTotal,
@@ -249,6 +250,15 @@ test("calculates saving and investing from the positive operating balance plus f
     investing: 175,
     total: 300,
   });
+});
+
+test("formats activity timestamps as today, yesterday, or their actual date", () => {
+  const now = new Date(2026, 10, 16, 15, 0);
+
+  assert.equal(formatActivityDate(new Date(2026, 10, 16, 9, 30), now), "Hoje, 09:30");
+  assert.equal(formatActivityDate(new Date(2026, 10, 15, 9, 30), now), "Ontem, 09:30");
+  assert.equal(formatActivityDate(new Date(2026, 10, 14, 9, 30), now), "14/11/2026, 09:30");
+  assert.equal(formatActivityDate("invalid", now), "");
 });
 
 test("does not apply percentages to a negative balance and ignores invalid negative plan values", () => {
