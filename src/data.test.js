@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   confirmClientRenewal,
   deleteTransaction,
+  getActiveClientServiceCount,
   getClientRenewalStatus,
   getFinanceAllocation,
   formatActivityDate,
@@ -299,6 +300,23 @@ test("overview totals include active recurring revenue and exclude canceled reve
   assert.equal(getRevenueTotal(transactions), 300);
   assert.equal(getMonthlyIncome(transactions, "2026-10"), 300);
   assert.equal(getReceivableTotal(transactions), 205);
+});
+
+test("counts active services from every client contract and excludes inactive contracts", () => {
+  const clients = [
+    { id: "legacy-active", status: "ATIVO", plan: "Site" },
+    {
+      id: "multi-service",
+      contracts: [
+        { id: "bot-active", status: "ATIVO" },
+        { id: "site-renewal-due", status: "PRAZO 5 DIAS" },
+        { id: "cancelled", status: "CANCELADO" },
+        { id: "expired", status: "EXPIRADO" },
+      ],
+    },
+  ];
+
+  assert.equal(getActiveClientServiceCount(clients), 3);
 });
 
 test("calculates saving and investing from the positive operating balance plus fixed values", () => {

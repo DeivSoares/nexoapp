@@ -181,6 +181,13 @@ export function getClientContracts(client) {
   }];
 }
 
+export function getActiveClientServiceCount(clients) {
+  return clients.reduce((total, client) => total + getClientContracts(client).filter((contract) => {
+    const status = String(contract.status || CLIENT_ACTIVE).toLocaleUpperCase("pt-BR");
+    return status === CLIENT_ACTIVE || status.startsWith("PRAZO ");
+  }).length, 0);
+}
+
 export function withClientContracts(client, contracts) {
   const primary = contracts[0];
   const statuses = contracts.map((contract) => contract.status || getClientRenewalStatus(contract));

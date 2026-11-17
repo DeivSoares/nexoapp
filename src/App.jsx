@@ -12,6 +12,7 @@ import {
   formatActivityDate,
   formatCurrency,
   formatShortDate,
+  getActiveClientServiceCount,
   getClientContracts,
   getFinanceAllocation,
   getDateInDays,
@@ -459,7 +460,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
   const monthIncome = getMonthlyIncome(data.transactions, getMonthKey());
   const financeAllocation = getFinanceAllocation(data.transactions, data.financePlan);
   const pending = getReceivableTotal(data.transactions);
-  const activeServices = data.services.filter((service) => service.status === "Ativo").length;
+  const activeServices = getActiveClientServiceCount(data.clients);
   const dueSoon = getUpcomingRenewals(data.clients);
   const today = new Date();
   const dateLabel = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toLocaleUpperCase("pt-BR");
@@ -491,7 +492,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
       <section className="metric-grid overview-metrics">
         <Metric title="Clientes ativos" value={data.clients.filter((client) => client.status === "ATIVO").length} icon="◎" note={`${data.clients.length} cadastrados`} />
         <Metric title="Receita do mês" value={formatCurrency(monthIncome)} icon="R$" note="Mensalidades ativas e receitas recebidas" tone="green" />
-        <Metric title="Serviços ativos" value={activeServices} icon="⌘" note={`${data.services.length} serviços cadastrados`} tone="orange" />
+        <Metric title="Serviços ativos" value={activeServices} icon="⌘" note="Serviços ativos nos contratos dos clientes" tone="orange" />
         <Metric title="A receber" value={formatCurrency(pending)} icon="↗" note="Lançamentos pendentes" tone="pink" />
         <Metric title="Separado para guardar/investir" value={formatCurrency(financeAllocation.total)} icon="↗" note={`Guardar ${formatCurrency(financeAllocation.saving)} · Investir ${formatCurrency(financeAllocation.investing)}`} tone="green" />
       </section>
