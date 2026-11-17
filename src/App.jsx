@@ -12,6 +12,7 @@ import {
   formatActivityDate,
   formatCurrency,
   formatShortDate,
+  getClientContracts,
   getFinanceAllocation,
   getDateInDays,
   getClientRenewalStatus,
@@ -31,6 +32,7 @@ import {
   updateData,
   updateProfilePhoto,
   updateService,
+  withClientContracts,
 } from "./data.js";
 import { getUserProfile, validateProfilePhotoUrl } from "./profile.js";
 import ascendMark from "./assets/ascend-mark.svg";
@@ -77,7 +79,10 @@ function PersonCell({ person, subtitle, tone = "avatar-blue" }) {
 }
 
 function ClientServiceCell({ client }) {
-  return <span className="client-service-cell">{client.plan || "—"}{client.serviceType && <small>{client.serviceType}</small>}</span>;
+  const contracts = getClientContracts(client);
+  if (contracts.length > 1) return <span>Múltiplos Serviços</span>;
+  const contract = contracts[0];
+  return <span className="client-service-cell">{contract.plan || "—"}{contract.serviceType && <small>{contract.serviceType}</small>}</span>;
 }
 
 function Metric({ title, value, icon, note, tone = "" }) {
@@ -133,21 +138,40 @@ function ActivityList({ activity, transactions, limit = 4 }) {
   );
 }
 
-function ClientRows({ clients, onEdit, onDelete, onConfirmRenewal }) {
+function ClientRows({ clients, onView, onEdit, onDelete, onConfirmRenewal }) {
   if (!clients.length) return <tr><td colSpan="8" className="empty-state">Nenhum cliente encontrado.</td></tr>;
   return clients.map((client) => (
-    <tr key={client.id}>
+    <tr
+      key={client.id}
+      className="client-row-clickable"
+      tabIndex={0}
+      aria-label={`Ver detalhes do cliente ${client.name}`}
+      aria-haspopup="dialog"
+      onClick={(event) => {
+        if (!event.target.closest("button")) onView(client);
+      }}
+      onKeyDown={(event) => {
+        if (event.target.closest("button")) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onView(client);
+        }
+      }}
+    >
       <td><PersonCell person={client} subtitle={client.company} /></td>
       <td>{client.discord || "—"}</td>
       <td><ClientServiceCell client={client} /></td>
       <td>{formatCurrency(client.monthly)}</td>
       <td>{formatCurrency(client.entryAmount)}</td>
-      <td>{formatShortDate(client.renewal)}</td>
+      <td><span className="client-service-cell">{getClientContracts(client).map((contract) => (
+        <span key={contract.id}>{formatShortDate(contract.renewal)}</span>
+      ))}</span></td>
       <td><Status value={client.status} /></td>
       <td><div className="row-actions">
-        {Number(client.monthly) > 0 && isRenewalDue(client) && (
-          <button className="row-action renewal-confirm" type="button" onClick={() => onConfirmRenewal(client)} aria-label={`Confirmar renovação de ${client.name}`} title="Confirmar renovação">✓</button>
-        )}
+        {getClientContracts(client).filter((contract) => Number(contract.monthly) > 0 && isRenewalDue(contract)).map((contract) => (
+          <button className="row-action renewal-confirm" type="button" key={contract.id} onClick={() => onConfirmRenewal(client, contract.id)} aria-label={`Confirmar renovação de ${client.name} — ${contract.plan}`} title={`Confirmar renovação: ${contract.plan}`}>✓</button>
+        ))}
+        <button className="row-action" type="button" onClick={() => onEdit(client, "contract")} aria-label={`Adicionar serviço para ${client.name}`} title="Adicionar serviço">+</button>
         <button className="row-action" type="button" onClick={() => onEdit(client)} aria-label={`Editar ${client.name}`} title="Editar cliente">✎</button>
         <button className="row-action" type="button" onClick={() => onDelete(client)} aria-label={`Excluir ${client.name}`} title="Excluir cliente">×</button>
       </div></td>
@@ -179,14 +203,15 @@ function EntryDialog({ type, services = [], client, service, onClose, onSave }) 
   const [transactionType, setTransactionType] = useState("Receita");
   const [saving, setSaving] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const matchedClientService = services.find((service) => service.id === client?.serviceId || service.name === client?.plan);
+  const primaryContract = client ? getClientContracts(client)[0] : null;
+  const matchedClientService = services.find((service) => service.id === primaryContract?.serviceId || service.name === primaryContract?.plan);
   const clientServiceChoices = [
     { value: "", label: services.length ? "Selecione um serviço" : "Nenhum serviço cadastrado", disabled: true },
     ...services.map((service) => ({ value: service.id, label: service.name })),
-    ...(client?.plan && !matchedClientService ? [{ value: "__existing__", label: client.plan }] : []),
+    ...(primaryContract?.plan && !matchedClientService ? [{ value: "__existing__", label: primaryContract.plan }] : []),
   ];
   const clientStatusChoices = client
-    ? [client.status || "ATIVO", ...(String(client.status || "").toLocaleUpperCase("pt-BR") === "CANCELADO" ? [] : ["CANCELADO"])]
+    ? [primaryContract?.status || "ATIVO", ...(String(primaryContract?.status || "").toLocaleUpperCase("pt-BR") === "CANCELADO" ? [] : ["CANCELADO"])]
     : ["ATIVO"];
 
   function applyServicePrices(event) {
@@ -195,9 +220,9 @@ function EntryDialog({ type, services = [], client, service, onClose, onSave }) 
     if (service) {
       form.elements.namedItem("monthly").value = Number(service.monthly || 0);
       form.elements.namedItem("entryAmount").value = Number(service.entryAmount || 0);
-    } else if (event.currentTarget.value === "__existing__" && client) {
-      form.elements.namedItem("monthly").value = Number(client.monthly || 0);
-      form.elements.namedItem("entryAmount").value = Number(client.entryAmount || 0);
+    } else if (event.currentTarget.value === "__existing__" && primaryContract) {
+      form.elements.namedItem("monthly").value = Number(primaryContract.monthly || 0);
+      form.elements.namedItem("entryAmount").value = Number(primaryContract.entryAmount || 0);
     }
   }
 
@@ -221,11 +246,21 @@ function EntryDialog({ type, services = [], client, service, onClose, onSave }) 
         <Field label="E-mail" name="email" type="email" placeholder="cliente@email.com" defaultValue={client?.email} required={false} />
         <Field label="WhatsApp" name="whatsapp" type="tel" placeholder="Ex.: +55 11 99999-9999" defaultValue={client?.whatsapp} required={false} />
         <Field label="Discord (usuário)" name="discord" placeholder="Ex.: usuario" defaultValue={client?.discord} required={false} />
-        <Field label="Serviço / contrato" name="serviceId" choices={clientServiceChoices} full defaultValue={matchedClientService?.id || (client?.plan ? "__existing__" : "")} onChange={applyServicePrices} />
-        <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={client?.monthly} />
-        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={client?.entryAmount ?? 0} required={false} />
-        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={client?.renewal ?? getDateInDays(30)} disabled={client?.status === "EXPIRADO"} />
-        <Field label="Status" name="status" choices={clientStatusChoices} defaultValue={client?.status ?? "ATIVO"} />
+        <Field label="Serviço / contrato principal" name="serviceId" choices={clientServiceChoices} full defaultValue={matchedClientService?.id || (primaryContract?.plan ? "__existing__" : "")} onChange={applyServicePrices} />
+        <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={primaryContract?.monthly} />
+        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={primaryContract?.entryAmount ?? 0} required={false} />
+        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={primaryContract?.renewal ?? getDateInDays(30)} disabled={primaryContract?.status === "EXPIRADO"} />
+        <Field label="Status" name="status" choices={clientStatusChoices} defaultValue={primaryContract?.status ?? "ATIVO"} />
+      </>,
+    },
+    contract: {
+      title: `Adicionar serviço para ${client?.name || "cliente"}`,
+      fields: <>
+        <Field label="Serviço / contrato" name="serviceId" choices={[{ value: "", label: services.length ? "Selecione um serviço" : "Nenhum serviço cadastrado", disabled: true }, ...services.map((item) => ({ value: item.id, label: item.name }))]} full defaultValue="" onChange={applyServicePrices} />
+        <Field label="Mensalidade (R$)" name="monthly" type="number" min="0" step="0.01" defaultValue={0} />
+        <Field label="Valor fixo / de entrada (R$)" name="entryAmount" type="number" min="0" step="0.01" defaultValue={0} required={false} />
+        <Field label="Próxima renovação" name="renewal" type="date" defaultValue={getDateInDays(30)} />
+        <Field label="Status" name="status" choices={["ATIVO", "CANCELADO"]} defaultValue="ATIVO" />
       </>,
     },
     transaction: {
@@ -285,13 +320,77 @@ function EntryDialog({ type, services = [], client, service, onClose, onSave }) 
         </div>
         <div className="dialog-fields">{config.fields}</div>
         {type === "member" && <p className="security-note">O usuário entrará pelo nome de usuário e senha. A senha não será salva nos dados da equipe.</p>}
-        {type === "client" && !services.length && <p className="security-note">Cadastre um serviço na aba Serviços antes de adicionar um cliente.</p>}
+        {(type === "client" || type === "contract") && !services.length && <p className="security-note">Cadastre um serviço na aba Serviços antes de adicionar um cliente.</p>}
         {submitError && <p className="form-error" role="alert">{submitError}</p>}
         <div className="dialog-actions">
           <button className="button button-secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
           <button className="button button-primary" type="submit" disabled={saving}>{saving ? "Salvando..." : type === "member" ? "Criar usuário" : "Salvar"}</button>
         </div>
       </form>
+    </dialog>
+  );
+}
+
+function ClientDetailsDialog({ client, onClose }) {
+  const dialogRef = useRef(null);
+  const contracts = getClientContracts(client);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    dialog.showModal();
+    dialog.querySelector("button")?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      className="app-dialog client-details-dialog"
+      ref={dialogRef}
+      aria-labelledby="client-details-title"
+      onCancel={onClose}
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div className="dialog-card">
+        <div className="dialog-heading">
+          <div><span className="eyebrow">CLIENTE</span><h2 id="client-details-title">{client.name}</h2></div>
+          <button className="icon-button dialog-close" type="button" onClick={onClose} aria-label="Fechar">×</button>
+        </div>
+        <div className="client-details-content">
+          <section>
+            <h3>Informações do cliente</h3>
+            <div className="client-details-grid">
+              <div><small>Empresa</small><strong>{client.company || "—"}</strong></div>
+              <div><small>E-mail</small><strong>{client.email || "—"}</strong></div>
+              <div><small>WhatsApp</small><strong>{client.whatsapp || "—"}</strong></div>
+              <div><small>Discord</small><strong>{client.discord || "—"}</strong></div>
+            </div>
+          </section>
+          <section>
+            <h3>Serviços e contratos</h3>
+            <div className="client-contract-list">
+              {contracts.map((contract) => (
+                <article className="client-contract-card" key={contract.id}>
+                  <div className="client-contract-heading">
+                    <div><strong>{contract.plan || "Serviço"}</strong><small>{contract.serviceType || "Tipo não informado"}</small></div>
+                    <Status value={contract.status || "ATIVO"} />
+                  </div>
+                  <div className="client-contract-stats">
+                    <div><small>Mensalidade</small><strong>{formatCurrency(contract.monthly)}</strong></div>
+                    <div><small>Entrada</small><strong>{formatCurrency(contract.entryAmount)}</strong></div>
+                    <div><small>Próxima renovação</small><strong>{formatShortDate(contract.renewal)}</strong></div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+        <div className="dialog-actions">
+          <button className="button button-secondary" type="button" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
     </dialog>
   );
 }
@@ -428,7 +527,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
         <section className="panel table-panel">
           <div className="panel-heading"><div><h2>Renovações próximas</h2><p>Clientes com vencimento nos próximos 10 dias</p></div></div>
           <DataTable columns={["CLIENTE", "SERVIÇO", "RENOVAÇÃO", "VALOR", "STATUS"]}>
-            {dueSoon.map((client) => <tr key={client.id}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
+            {dueSoon.map((client) => <tr key={`${client.id}-${client.contractId}`}><td><PersonCell person={client} subtitle={client.company} /></td><td><ClientServiceCell client={client} /></td><td>{formatShortDate(client.renewal)}</td><td>{formatCurrency(client.monthly)}</td><td><Status value={client.status} /></td></tr>)}
             {!dueSoon.length && <tr><td colSpan="5" className="empty-state">Nenhuma renovação nos próximos dias.</td></tr>}
           </DataTable>
         </section>
@@ -437,7 +536,7 @@ function Overview({ data, userName, onNavigate, onNewClient, onDeleteClient }) {
   );
 }
 
-function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }) {
+function ClientsPage({ data, search, onNew, onView, onEdit, onDelete, onConfirmRenewal }) {
   const clients = data.clients.filter((client) => [client.name, client.company, client.email, client.whatsapp, client.discord, client.plan, client.status].some((value) => String(value || "").toLocaleLowerCase("pt-BR").includes(search)));
   const activeMonthly = data.clients
     .filter((client) => client.status === "ATIVO" || String(client.status).startsWith("PRAZO "))
@@ -453,7 +552,7 @@ function ClientsPage({ data, search, onNew, onEdit, onDelete, onConfirmRenewal }
       </section>
       <section className="panel table-panel">
         <div className="panel-heading"><div><h2>Todos os clientes</h2><p>{clients.length} de {data.clients.length} registros</p></div></div>
-        <DataTable columns={["CLIENTE", "DISCORD", "SERVIÇO / CONTRATO", "MENSALIDADE", "ENTRADA", "RENOVAÇÃO", "STATUS", "AÇÕES"]}><ClientRows clients={clients} onEdit={onEdit} onDelete={onDelete} onConfirmRenewal={onConfirmRenewal} /></DataTable>
+        <DataTable columns={["CLIENTE", "DISCORD", "SERVIÇO / CONTRATO", "MENSALIDADE", "ENTRADA", "RENOVAÇÃO", "STATUS", "AÇÕES"]}><ClientRows clients={clients} onView={onView} onEdit={onEdit} onDelete={onDelete} onConfirmRenewal={onConfirmRenewal} /></DataTable>
       </section>
     </>
   );
@@ -589,6 +688,7 @@ export default function App() {
   const [theme, setTheme] = useState(getSavedTheme);
   const [dialogType, setDialogType] = useState("");
   const [editingClient, setEditingClient] = useState(null);
+  const [viewingClientId, setViewingClientId] = useState(null);
   const [editingService, setEditingService] = useState(null);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [toast, setToast] = useState("");
@@ -802,25 +902,60 @@ export default function App() {
     }
 
     commit((current) => {
+      if (type === "contract") {
+        const selectedService = dataRef.current?.services.find((service) => service.id === values.serviceId);
+        if (!clientToUpdate || !selectedService) throw new Error("Selecione um serviço válido para este cliente.");
+        const addedContract = {
+          id: createId("ct"),
+          serviceId: selectedService.id,
+          plan: selectedService.name,
+          serviceType: selectedService.type,
+          monthly: Number(values.monthly),
+          entryAmount: Number(values.entryAmount || 0),
+          renewal: values.renewal,
+          status: getClientRenewalStatus({ renewal: values.renewal, status: values.status }),
+          revenueExclusions: [],
+        };
+        const savedClient = withClientContracts(
+          clientToUpdate,
+          [...getClientContracts(clientToUpdate), addedContract],
+        );
+        const next = {
+          ...current,
+          clients: current.clients.map((entry) => entry.id === clientToUpdate.id ? savedClient : entry),
+          transactions: syncClientRevenue(current.transactions, savedClient),
+        };
+        return addActivity(next, `Serviço ${addedContract.plan} adicionado para ${clientToUpdate.name}`);
+      }
       if (type === "client") {
         const selectedService = dataRef.current?.services.find((service) => service.id === values.serviceId);
-        const savedClient = {
+        const oldContracts = clientToUpdate ? getClientContracts(clientToUpdate) : [];
+        const oldPrimary = oldContracts[0];
+        const primaryContract = {
+          ...oldPrimary,
+          id: oldPrimary?.id || createId("ct"),
+          serviceId: selectedService?.id || oldPrimary?.serviceId || "",
+          plan: selectedService?.name || oldPrimary?.plan || "",
+          serviceType: selectedService?.type || oldPrimary?.serviceType || "",
+          monthly: Number(values.monthly),
+          entryAmount: Number(values.entryAmount || 0),
+          renewal: values.renewal || oldPrimary?.renewal || "",
+          status: getClientRenewalStatus({
+            renewal: values.renewal || oldPrimary?.renewal,
+            status: values.status || oldPrimary?.status,
+          }),
+        };
+        const savedClient = withClientContracts({
           ...clientToUpdate,
           ...values,
-          serviceId: selectedService?.id || clientToUpdate?.serviceId || "",
-          plan: selectedService?.name || clientToUpdate?.plan || "",
-          serviceType: selectedService?.type || clientToUpdate?.serviceType || "",
           id: clientToUpdate?.id || createId("c"),
           name: normalizedName,
-          status: getClientRenewalStatus({ ...values, status: values.status }),
           photoUrl: validateProfilePhotoUrl(values.photoUrl || ""),
           email: values.email.trim(),
           whatsapp: values.whatsapp.trim(),
           discord: values.discord.trim(),
-          monthly: Number(values.monthly),
-          entryAmount: Number(values.entryAmount || 0),
           initials: normalizedName.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase(),
-        };
+        }, [primaryContract, ...oldContracts.slice(1)]);
         const clients = clientToUpdate
           ? current.clients.map((entry) => entry.id === clientToUpdate.id ? savedClient : entry)
           : [...current.clients, savedClient];
@@ -844,7 +979,8 @@ export default function App() {
       const next = { ...current, team: [...current.team, member] };
       return addActivity(next, `${normalizedName} foi adicionado à equipe`);
     }, ({
-      client: "Cliente cadastrado com sucesso.",
+      client: clientToUpdate ? "Cliente atualizado com sucesso." : "Cliente cadastrado com sucesso.",
+      contract: "Serviço adicionado ao cliente com sucesso.",
       transaction: "Lançamento adicionado com sucesso.",
       service: "Serviço cadastrado com sucesso.",
       member: "Pessoa adicionada à equipe.",
@@ -877,9 +1013,9 @@ export default function App() {
     }, collection === "transactions" ? "Lançamento removido." : "Registro removido.");
   }
 
-  function handleConfirmRenewal(client) {
+  function handleConfirmRenewal(client, contractId) {
     commit((current) => {
-      const next = confirmClientRenewal(current, client.id);
+      const next = confirmClientRenewal(current, client.id, contractId);
       return next === current ? current : addActivity(next, `Renovação de ${client.name} confirmada`);
     }, "Renovação confirmada. Cliente reativado e lançamento financeiro atualizado.");
   }
@@ -977,6 +1113,7 @@ export default function App() {
   }
 
   const profile = useMemo(() => getUserProfile(user, data, membership), [user, data, membership]);
+  const viewingClient = data?.clients.find((client) => client.id === viewingClientId);
 
   if (!authReady || !user) return <div className="auth-loading" role="status">Verificando acesso...</div>;
   if (storageError) {
@@ -1030,7 +1167,7 @@ export default function App() {
         </header>
         <main className={`page-content${pageTransition ? ` ${pageTransition}` : ""}`} id="page-content" tabIndex="-1">
           {currentPage === "overview" && <Overview data={data} userName={user.displayName || user.email?.split("@")[0]} onNavigate={navigate} onNewClient={() => setDialogType("client")} onDeleteClient={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} />}
-          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onEdit={(client) => { setEditingClient(client); setDialogType("client"); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
+          {currentPage === "clients" && <ClientsPage {...common} onNew={() => { if (!data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um cliente."); setEditingClient(null); setDialogType("client"); }} onView={(client) => setViewingClientId(client.id)} onEdit={(client, dialog = "client") => { if (dialog === "contract" && !data.services.length) return setToast("Cadastre um serviço na aba Serviços antes de adicionar um contrato."); setEditingClient(client); setDialogType(dialog); }} onDelete={(client) => deleteItem("clients", client, `Excluir o cliente ${client.name}?`)} onConfirmRenewal={handleConfirmRenewal} />}
           {currentPage === "finance" && <FinancePage {...common} onNew={() => setDialogType("transaction")} onDelete={(entry) => deleteItem("transactions", entry, `Excluir o lançamento "${entry.description}"?${entry.clientId ? " A cobrança atual será removida; o cliente continuará cadastrado." : ""}`)} onSavePlan={(financePlan) => commit((current) => {
             const allocation = getFinanceAllocation(current.transactions, financePlan);
             return addActivity({ ...current, financePlan }, `Separação definida: Guardar ${formatCurrency(allocation.saving)} · Investir ${formatCurrency(allocation.investing)}`);
@@ -1040,7 +1177,8 @@ export default function App() {
         </main>
         <footer className="page-footer"><span>Ascend Gestão</span><span>Uma operação mais conectada.</span></footer>
       </div>
-      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || editingService?.id || "new"}`} type={dialogType} services={data.services} client={dialogType === "client" ? editingClient : null} service={dialogType === "service" ? editingService : null} onClose={() => { setDialogType(""); setEditingClient(null); setEditingService(null); }} onSave={handleSave} />}
+      {dialogType && <EntryDialog key={`${dialogType}-${editingClient?.id || editingService?.id || "new"}`} type={dialogType} services={data.services} client={dialogType === "client" || dialogType === "contract" ? editingClient : null} service={dialogType === "service" ? editingService : null} onClose={() => { setDialogType(""); setEditingClient(null); setEditingService(null); }} onSave={handleSave} />}
+      {viewingClient && <ClientDetailsDialog key={viewingClient.id} client={viewingClient} onClose={() => setViewingClientId(null)} />}
       {profileDialogOpen && <ProfilePhotoDialog photoUrl={profile.photoUrl} onClose={() => setProfileDialogOpen(false)} onSave={handleProfilePhotoSave} />}
       {toast && <div className="toast is-visible" role="status" aria-live="polite">{toast}</div>}
     </div>

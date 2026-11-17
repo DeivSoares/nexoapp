@@ -188,6 +188,10 @@ tbody tr:last-child td { border-bottom: 0; }
 .table-person .avatar { width: 29px; height: 29px; font-size: 9px; }
 .table-person strong { display: block; color: #303b51; font-size: 10px; font-weight: 600; }
 .table-person small { display: block; margin-top: 3px; color: #a0a7b5; font-size: 9px; }
+.client-row-clickable { cursor: pointer; }
+.client-row-clickable:hover td,
+.client-row-clickable:focus-visible td { background: #f7f8ff; }
+.client-row-clickable:focus-visible { outline: 2px solid #8794f2; outline-offset: -2px; }
 .status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 20px; background: var(--green-soft); color: var(--green); font-size: 9px; font-weight: 600; }
 .status::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
 .status.pending { background: var(--amber-soft); color: var(--amber); }
@@ -237,12 +241,27 @@ tbody tr:last-child td { border-bottom: 0; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .table-toolbar .text-link { border: 0; background: transparent; color: var(--blue); font-size: 10px; font-weight: 600; }
 .app-dialog { width: min(100% - 28px, 480px); max-width: 480px; max-height: min(90vh,720px); padding: 0; overflow: auto; border: 0; border-radius: 14px; background: transparent; box-shadow: 0 20px 70px #18234533; }
+.client-details-dialog { width: min(100% - 28px, 620px); max-width: 620px; }
 .app-dialog::backdrop { background: #18223b70; backdrop-filter: blur(2px); }
 .dialog-card { padding: 23px; border-radius: 14px; background: #fff; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
 .dialog-heading h2 { margin: 5px 0 0; font-family: "Segoe UI",Arial,sans-serif; font-size: 20px; }
 .dialog-close { width: 29px; height: 29px; font-size: 22px; }
 .dialog-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 13px; }
+.client-details-content { display: grid; gap: 18px; }
+.client-details-content h3 { margin: 0 0 10px; color: #303b51; font-size: 12px; }
+.client-details-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.client-details-grid > div { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.client-details-grid small,
+.client-contract-stats small { display: block; margin-bottom: 5px; color: var(--muted); font-size: 9px; }
+.client-details-grid strong { display: block; overflow-wrap: anywhere; color: var(--ink); font-size: 10px; }
+.client-contract-list { display: grid; gap: 9px; }
+.client-contract-card { padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.client-contract-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.client-contract-heading strong { display: block; color: var(--ink); font-size: 11px; }
+.client-contract-heading small { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+.client-contract-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.client-contract-stats strong { color: var(--ink); font-size: 10px; }
 .form-field { display: grid; gap: 6px; }
 .form-field.full { grid-column: 1 / -1; }
 .form-field label { color: #5e687c; font-size: 10px; font-weight: 600; }
@@ -291,6 +310,7 @@ tbody tr:last-child td { border-bottom: 0; }
 :root[data-theme="dark"] td { color: #b8c1d2; }
 :root[data-theme="dark"] .activity-text strong,
 :root[data-theme="dark"] .table-person strong,
+:root[data-theme="dark"] .client-details-content h3,
 :root[data-theme="dark"] .table-strong,
 :root[data-theme="dark"] .service-card-stats strong { color: #e2e7f1; }
 :root[data-theme="dark"] th { background: #1c2433; color: #a0abc0; }
@@ -305,6 +325,8 @@ tbody tr:last-child td { border-bottom: 0; }
 :root[data-theme="dark"] .status.inactive { background: #2a3445; color: #a0abc0; }
 :root[data-theme="dark"] .row-action { color: #a0abc0; }
 :root[data-theme="dark"] .row-action.renewal-confirm { border-color: #315344; color: var(--green); }
+:root[data-theme="dark"] .client-row-clickable:hover td,
+:root[data-theme="dark"] .client-row-clickable:focus-visible td { background: #252c43; }
 :root[data-theme="dark"] .role-pill { background: #292f50; color: #aab4ff; }
 :root[data-theme="dark"] .form-field label { color: #bdc6d6; }
 :root[data-theme="dark"] .mobile-menu { color: #b5bfd0; }
@@ -318,6 +340,11 @@ tbody tr:last-child td { border-bottom: 0; }
   .metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .overview-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .finance-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+
+@media (max-width: 550px) {
+  .client-details-grid { grid-template-columns: 1fr; }
+  .client-contract-stats { grid-template-columns: 1fr; }
 }
 @media (max-width: 960px) {
   .finance-workspace { grid-template-columns: 1fr; }

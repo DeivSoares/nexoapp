@@ -12,11 +12,13 @@ import {
   getReceivableTotal,
   getRevenueTotal,
   getUpcomingRenewals,
+  getClientContracts,
   isRenewalDue,
   removeClientRevenue,
   syncClientRevenue,
   syncClientRenewalStatuses,
   updateServiceAndClients,
+  withClientContracts,
 } from "./data.js";
 
 const client = {
@@ -116,6 +118,71 @@ test("editing a service updates linked clients and their monthly and fixed finan
   assert.equal(updated.transactions.filter((entry) => entry.revenueKind === "monthly").every((entry) => entry.amount === 300 && entry.description === "Mensalidade — Empresa Teste"), true);
   assert.equal(updated.transactions.filter((entry) => entry.revenueKind === "fixed").every((entry) => entry.amount === 750 && entry.description === "Entrada fixa — Empresa Teste"), true);
   assert.ok(updated.transactions.some((entry) => entry.id === "unrelated"));
+});
+
+test("keeps multiple client services and their recurring and fixed charges independent", () => {
+  const primary = {
+    id: "contract-primary",
+    serviceId: "service-primary",
+    plan: "Site",
+    serviceType: "Site",
+    monthly: 250,
+    entryAmount: 500,
+    renewal: "2026-11-15",
+    status: "ATIVO",
+  };
+  const additional = {
+    id: "contract-additional",
+    serviceId: "service-additional",
+    plan: "Hospedagem de bot",
+    serviceType: "Bot",
+    monthly: 80,
+    entryAmount: 25,
+    renewal: "2026-10-24",
+    status: "PRAZO 0 DIAS",
+  };
+  const customer = withClientContracts(client, [primary, additional]);
+  const transactions = syncClientRevenue([], customer, new Date(2026, 9, 24));
+
+  assert.deepEqual(getClientContracts(customer).map(({ id }) => id), [primary.id, additional.id]);
+  assert.equal(customer.monthly, 330);
+  assert.equal(transactions.filter((entry) => entry.revenueKind === "monthly").length, 2);
+  assert.equal(transactions.filter((entry) => entry.revenueKind === "fixed").length, 2);
+  assert.equal(new Set(transactions.map((entry) => entry.contractId)).size, 2);
+  assert.equal(getUpcomingRenewals([customer], 10, new Date(2026, 9, 24))[0].contractId, additional.id);
+
+  const renewed = confirmClientRenewal({
+    clients: [customer],
+    transactions,
+  }, customer.id, additional.id, new Date(2026, 9, 24));
+  const renewedContracts = getClientContracts(renewed.clients[0]);
+  assert.equal(renewedContracts[0].renewal, primary.renewal);
+  assert.equal(renewedContracts[1].renewal, "2026-11-24");
+  assert.equal(renewed.transactions.find((entry) => entry.contractId === primary.id && entry.revenueKind === "monthly").date, primary.renewal);
+  assert.equal(renewed.transactions.find((entry) => entry.contractId === additional.id && entry.revenueKind === "monthly").date, "2026-11-24");
+});
+
+test("updates only the matching service in a client's multiple contracts", () => {
+  const site = { id: "site-service", name: "Site", type: "Site", monthly: 100, entryAmount: 0 };
+  const bot = { id: "bot-service", name: "Bot", type: "Bot", monthly: 50, entryAmount: 10 };
+  const customer = withClientContracts(client, [
+    { id: "site-contract", serviceId: site.id, plan: site.name, monthly: site.monthly, entryAmount: 0, renewal: "2026-12-01", status: "ATIVO" },
+    { id: "bot-contract", serviceId: bot.id, plan: bot.name, monthly: bot.monthly, entryAmount: bot.entryAmount, renewal: "2026-12-15", status: "ATIVO" },
+  ]);
+  const updated = updateServiceAndClients({
+    services: [site, bot],
+    clients: [customer],
+    transactions: syncClientRevenue([], customer, new Date(2026, 9, 24)),
+  }, bot, { name: "Hospedagem de bot", monthly: 75, entryAmount: 20 }, new Date(2026, 9, 24));
+  const contracts = getClientContracts(updated.clients[0]);
+
+  assert.equal(contracts[0].plan, "Site");
+  assert.equal(contracts[0].monthly, 100);
+  assert.equal(contracts[1].plan, "Hospedagem de bot");
+  assert.equal(contracts[1].monthly, 75);
+  assert.equal(updated.clients[0].monthly, 175);
+  assert.equal(updated.transactions.find((entry) => entry.contractId === "site-contract" && entry.revenueKind === "monthly").amount, 100);
+  assert.equal(updated.transactions.find((entry) => entry.contractId === "bot-contract" && entry.revenueKind === "monthly").amount, 75);
 });
 
 test("deleting a client removes its recurring revenue but keeps received fixed income", () => {
